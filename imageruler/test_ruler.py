@@ -1,6 +1,6 @@
 import numpy as np
 import unittest
-import ruler
+from imageruler import ruler
 from regular_shapes import disc, rounded_square
 
 resolution = 1
