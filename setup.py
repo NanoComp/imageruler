@@ -9,7 +9,8 @@ setuptools.setup(
     author_email='',
     install_requires=[
         'numpy',
-        'opencv-python'
+        'opencv-python',
+        'pytest',
     ],
     url='https://github.com/NanoComp/imageruler',
     packages=setuptools.find_packages(),
