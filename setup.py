@@ -11,6 +11,7 @@ setuptools.setup(
         'numpy',
         'opencv-python',
         'pytest',
+        'pytest-xdist',
     ],
     url='https://github.com/NanoComp/imageruler',
     packages=setuptools.find_packages(),
