@@ -34,7 +34,7 @@ def minimum_length_solid(arr: np.ndarray,
         return short_entire_side
 
     if arr.ndim == 1:
-        if margin_size != None:
+        if margin_size is not None:
             arr = _trim(arr, margin_size, pixel_size)
         solid_min_length, _ = _minimum_length_1d(arr)
         return solid_min_length * short_pixel_side
@@ -52,7 +52,7 @@ def minimum_length_solid(arr: np.ndarray,
         """
         open_diff = binary_open(arr, diameter, pixel_size, pad_mode) ^ arr
         interior_diff = open_diff & _get_interior(arr, "in", pad_mode)
-        if margin_size != None:
+        if margin_size is not None:
             interior_diff = _trim(interior_diff, margin_size, pixel_size)
         return interior_diff.any()
 
@@ -147,7 +147,7 @@ def minimum_length(
         return short_entire_side
 
     if arr.ndim == 1:
-        if margin_size != None:
+        if margin_size is not None:
             arr = _trim(arr, margin_size, pixel_size)
         solid_min_length, void_min_length = _minimum_length_1d(arr)
         return min(solid_min_length, void_min_length) * short_pixel_side
@@ -168,7 +168,7 @@ def minimum_length(
 
         close_open_diff = binary_open(arr, diameter, pixel_size, pad_mode[0]) ^ binary_close(arr, diameter, pixel_size, pad_mode[1])
         interior_diff = close_open_diff & _get_interior(arr, "both", pad_mode)
-        if margin_size != None:
+        if margin_size is not None:
             interior_diff = _trim(interior_diff, margin_size, pixel_size)
         return interior_diff.any()
 
@@ -206,7 +206,7 @@ def length_violation_solid(arr: np.ndarray,
 
     if interior:
         open_diff = open_diff & _get_interior(arr, "in", pad_mode)
-    if margin_size != None:
+    if margin_size is not None:
         open_diff = _trim(open_diff, margin_size, pixel_size)
 
     return open_diff
@@ -269,7 +269,7 @@ def length_violation(arr: np.ndarray,
             
     if interior:
         close_open_diff = close_open_diff & _get_interior(arr, "both", pad_mode)
-    if margin_size != None:
+    if margin_size is not None:
         close_open_diff = _trim(close_open_diff, margin_size, pixel_size)
 
     return close_open_diff
@@ -299,7 +299,7 @@ def _ruler_initialize(arr, phys_size):
             phys_size.nonzero()]  # keep nonzero elements only
     elif isinstance(phys_size, float) or isinstance(phys_size, int):
         phys_size = np.array([phys_size])
-    elif phys_size == None:
+    elif phys_size is None:
         phys_size = arr.shape
     else:
         AssertionError("Invalid format of the physical size.")
