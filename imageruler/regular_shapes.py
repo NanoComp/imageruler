@@ -25,8 +25,11 @@ def rounded_square(
     phys_size = np.array(phys_size)
     angle = np.radians(angle)
 
-    n = np.round(phys_size * resolution).astype(int) # number of pixels along each dimension
-    grid_size = (n - 1) / resolution  # size of the entire pattern formed by centers of pixels
+    n = np.round(phys_size * resolution).astype(
+        int)  # number of pixels along each dimension
+    grid_size = (
+        n - 1
+    ) / resolution  # size of the entire pattern formed by centers of pixels
 
     x_coord = np.linspace(-grid_size[0] / 2, grid_size[0] / 2, n[0])
     y_coord = np.linspace(-grid_size[1] / 2, grid_size[1] / 2, n[1])
@@ -88,8 +91,5 @@ def disc(resolution: float,
     x_coord = np.linspace(-grid_size[0] / 2, grid_size[0] / 2, n[0])
     y_coord = np.linspace(-grid_size[1] / 2, grid_size[1] / 2, n[1])
     xv, yv = np.meshgrid(x_coord, y_coord, sparse=True, indexing='ij')
-    disc = np.where(
-        abs(xv - center[0])**2 + abs(yv - center[1])**2 <= diameter**2 / 4, 1,
-        0)
 
-    return disc > 0.1
+    return (xv - center[0])**2 + (yv - center[1])**2 <= diameter**2 / 4
