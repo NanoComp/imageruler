@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 import imageruler
-from regular_shapes import disc, rounded_square
+from imageruler.regular_shapes import disc, rounded_square
 
 resolution = 1
 phys_size = (200, 200)
