@@ -35,7 +35,7 @@ def minimum_length_solid(arr: np.ndarray,
         return short_entire_side
 
     if arr.ndim == 1:
-        if margin_size != None:
+        if margin_size is not None:
             arr = _trim(arr, margin_size, pixel_size)
         solid_min_length, _ = _minimum_length_1d(arr)
         return solid_min_length * short_pixel_side
@@ -51,12 +51,8 @@ def minimum_length_solid(arr: np.ndarray,
         Returns:
             A boolean that indicates whether the difference between the design pattern and its opening happens at the interior of solid regions, with the edge regions specified by `margin_size` disregarded.
         """
-        open_diff = binary_open(arr, diameter, pixel_size, pad_mode) ^ arr
-        interior_diff = open_diff & _get_interior(
-            arr, direction="in", pad_mode=pad_mode)
-        if margin_size != None:
-            interior_diff = _trim(interior_diff, margin_size, pixel_size)
-        return interior_diff.any()
+        return _length_violation_solid(arr, diameter, pixel_size, margin_size,
+                                       pad_mode).any()
 
     min_len, _ = _search([short_pixel_side, short_entire_side],
                          min(pixel_size) / 2,
@@ -121,30 +117,6 @@ def minimum_length(
     phys_size: Optional[Tuple[float, ...]] = None,
     margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
     pad_mode: Tuple[str, str] = ('solid', 'void')
-) -> Tuple[float, float]:
-    """
-    Compute the minimum length scales of both solid and void regions in a design pattern.
-
-    Args:
-        arr: A 1d or 2d array that represents a design pattern.
-        phys_size: A tuple that represents the physical size of the design pattern.
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A tuple of two strings that represent the padding modes for measuring solid and void minimum length scales, respectively.
-
-    Returns:
-        A tuple of two floats that represent the minimum length scales of solid and void regions, respectively. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
-    """
-
-    if isinstance(pad_mode, str): pad_mode = (pad_mode, pad_mode)
-    return min(minimum_length_solid(arr, phys_size, margin_size, pad_mode[0]),
-               minimum_length_void(arr, phys_size, margin_size, pad_mode[1]))
-
-
-def minimum_length_min(
-    arr: np.ndarray,
-    phys_size: Optional[Tuple[float, ...]] = None,
-    margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
-    pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> float:
     """
     For 2d design patterns, compute the minimum length scale through the difference between morphological opening and closing.
@@ -155,7 +127,7 @@ def minimum_length_min(
         arr: A 1d or 2d array that represents a design pattern.
         phys_size: A tuple that represents the physical size of the design pattern.
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A tuple of two strings that represent the padding modes for morphological opening nad closing, respectively.
+        pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
 
     Returns:
         A float that represents the minimum length scale in the design pattern. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
@@ -173,7 +145,7 @@ def minimum_length_min(
         return short_entire_side
 
     if arr.ndim == 1:
-        if margin_size != None:
+        if margin_size is not None:
             arr = _trim(arr, margin_size, pixel_size)
         solid_min_length, void_min_length = _minimum_length_1d(arr)
         return min(solid_min_length, void_min_length) * short_pixel_side
@@ -191,21 +163,159 @@ def minimum_length_min(
         Returns:
             A boolean that indicates whether the difference between opening and closing happens at the regions that exclude the borders between solid and void regions, with the edge regions specified by `margin_size` disregarded.
         """
-
-        closing = binary_close(arr, diameter, pixel_size, pad_mode[1])
-        close_open_diff = binary_open(arr, diameter, pixel_size,
-                                      pad_mode[0]) ^ closing
-        interior_diff = close_open_diff & _get_interior(
-            arr, direction="both", pad_mode=pad_mode)
-        if margin_size != None:
-            interior_diff = _trim(interior_diff, margin_size, pixel_size)
-        return interior_diff.any()
+        return _length_violation(arr, diameter, pixel_size, margin_size,
+                                 pad_mode).any()
 
     min_len, _ = _search([short_pixel_side, short_entire_side],
                          min(pixel_size) / 2,
                          lambda d: _interior_pixel_number(d, arr))
 
     return min_len
+
+
+def _length_violation_solid(arr: np.ndarray,
+                            diameter: float,
+                            pixel_size: Tuple[float, float],
+                            margin_size: Optional[Tuple[Tuple[float, float],
+                                                        ...]] = None,
+                            pad_mode: str = 'solid') -> np.ndarray:
+    """
+    Indicates the areas where the length scale violation happens in solid regions of a 2d binary pattern.
+
+    Args:
+        arr: A 2d Boolean array that represents a binary design pattern.
+        diameter: A float that represents the diameter of the structuring element.
+        phys_size: A tuple, list, or array of two floats that represents the physical size of one pixel.
+        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
+        pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
+
+    Returns:
+        A Boolean array that represents the pattern of solid length scale violation.
+    """
+
+    open_diff = binary_open(arr, diameter, pixel_size, pad_mode) ^ arr
+    interior_diff = open_diff & _get_interior(arr, "in", pad_mode)
+    if margin_size is not None:
+        interior_diff = _trim(interior_diff, margin_size, pixel_size)
+
+    return interior_diff
+
+
+def _length_violation(
+    arr: np.ndarray,
+    diameter: float,
+    pixel_size: Tuple[float, float],
+    margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
+    pad_mode: Tuple[str, str] = ('solid', 'void')
+) -> np.ndarray:
+    """
+    Indicates the areas where the length scale violation happens in solid regions of a 2d binary pattern.
+
+    Args:
+        arr: A 2d Boolean array that represents a binary design pattern.
+        diameter: A float that represents the diameter of the structuring element.
+        phys_size: A tuple, list, or array of two floats that represents the physical size of one pixel.
+        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
+        pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
+
+    Returns:
+        A Boolean array that represents the pattern of solid or void length scale violation.
+    """
+
+    close_open_diff = binary_open(arr, diameter, pixel_size,
+                                  pad_mode[0]) ^ binary_close(
+                                      arr, diameter, pixel_size, pad_mode[1])
+    interior_diff = close_open_diff & _get_interior(arr, "both", pad_mode)
+    if margin_size is not None:
+        interior_diff = _trim(interior_diff, margin_size, pixel_size)
+
+    return interior_diff
+
+
+def length_violation_solid(arr: np.ndarray,
+                           diameter: float,
+                           phys_size: Optional[Tuple[float, ...]] = None,
+                           margin_size: Optional[Tuple[Tuple[float, float],
+                                                       ...]] = None,
+                           pad_mode: str = 'solid') -> np.ndarray:
+    """
+    Indicates the areas where the length scale violation happens in solid regions of a 2d binary pattern.
+
+    Args:
+        arr: A 2d array that represents a design pattern.
+        diameter: A float that represents the diameter of the kernel.
+        phys_size: A tuple that represents the physical size of the design pattern.
+        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
+        pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
+
+    Returns:
+        A Boolean array that represents the pattern of solid length scale violation.
+    """
+
+    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
+    assert arr.ndim == 2
+    return _length_violation_solid(arr, diameter, pixel_size, margin_size,
+                                   pad_mode)
+
+
+def length_violation_void(arr: np.ndarray,
+                          diameter: float,
+                          phys_size: Optional[Tuple[float, ...]] = None,
+                          margin_size: Optional[Tuple[Tuple[float, float],
+                                                      ...]] = None,
+                          pad_mode: str = 'void') -> np.ndarray:
+    """
+    Indicates the areas where the length scale violation happens in void regions of a 2d binary pattern.
+
+    Args:
+        arr: A 2d array that represents a design pattern.
+        diameter: A float that represents the diameter of the kernel.
+        phys_size: A tuple that represents the physical size of the design pattern.
+        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
+        pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
+        interior: A Boolean value that indicates whether interfacial pixels of void regions are excluded in the result.
+
+    Returns:
+        A Boolean array that represents the pattern of void length scale violation.
+    """
+
+    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
+    assert arr.ndim == 2
+
+    if pad_mode == 'solid': pad_mode = 'void'
+    elif pad_mode == 'void': pad_mode = 'solid'
+    else: pad_mode == 'edge'
+
+    return _length_violation_solid(~arr, diameter, pixel_size, margin_size,
+                                   pad_mode)
+
+
+def length_violation(
+    arr: np.ndarray,
+    diameter: float,
+    phys_size: Optional[Tuple[float, ...]] = None,
+    margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
+    pad_mode: Tuple[str, str] = ('solid', 'void')
+) -> np.ndarray:
+    """
+    Indicates the areas where the length-scale violation happens in a 2d binary pattern.
+
+    Args:
+        arr: A 2d array that represents a design pattern.
+        diameter: A float that represents the diameter of the kernel.
+        phys_size: A tuple that represents the physical size of the design pattern.
+        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
+        pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
+
+    Returns:
+        A Boolean array that represents the pattern of solid or void length scale violation.
+    """
+
+    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
+    assert arr.ndim == 2
+    if isinstance(pad_mode, str): pad_mode = (pad_mode, pad_mode)
+
+    return _length_violation(arr, diameter, pixel_size, margin_size, pad_mode)
 
 
 def _ruler_initialize(arr, phys_size):
@@ -232,7 +342,7 @@ def _ruler_initialize(arr, phys_size):
             phys_size.nonzero()]  # keep nonzero elements only
     elif isinstance(phys_size, float) or isinstance(phys_size, int):
         phys_size = np.array([phys_size])
-    elif phys_size == None:
+    elif phys_size is None:
         phys_size = arr.shape
     else:
         AssertionError("Invalid format of the physical size.")
@@ -260,7 +370,7 @@ def _search(arg_range, arg_threshold, function):
         function: A function that returns True if the viariable is large enough but False if the variable is not large enough.
 
     Returns:
-        A tuple with two elements. The first is a float that represents the search result. The second is a Boolean, which is True if the search indeed happens, False if the condition for starting search is not satisfied in the beginning.
+        A tuple with two elements. The first is a float that represents the search result. The second is a Boolean value, which is True if the search indeed happens, False if the condition for starting search is not satisfied in the beginning.
 
     Raises:
         AssertionError: If `function` returns True at a smaller input viariable but False at a larger input viariable.
@@ -423,8 +533,8 @@ def _get_kernel(diameter, pixel_size):
 
 def binary_open(arr: np.ndarray,
                 diameter: float,
-                pixel_size: Tuple[float, float],
-                pad_mode: str = 'edge'):
+                pixel_size: Tuple[float, float] = (1.0, 1.0),
+                pad_mode: str = 'edge') -> np.ndarray:
     """
     Morphological opening.
 
@@ -441,13 +551,14 @@ def binary_open(arr: np.ndarray,
     kernel = _get_kernel(diameter, pixel_size)
     arr = _proper_pad(arr, kernel, pad_mode)
     opened = cv.morphologyEx(src=arr, kernel=kernel, op=cv.MORPH_OPEN)
+
     return _proper_unpad(opened, kernel).astype(bool)
 
 
 def binary_close(arr: np.ndarray,
                  diameter: float,
-                 pixel_size: Tuple[float, float],
-                 pad_mode: str = 'edge'):
+                 pixel_size: Tuple[float, float] = (1.0, 1.0),
+                 pad_mode: str = 'edge') -> np.ndarray:
     """
     Morphological closing.
 
@@ -464,13 +575,14 @@ def binary_close(arr: np.ndarray,
     kernel = _get_kernel(diameter, pixel_size)
     arr = _proper_pad(arr, kernel, pad_mode)
     closed = cv.morphologyEx(src=arr, kernel=kernel, op=cv.MORPH_CLOSE)
+
     return _proper_unpad(closed, kernel).astype(bool)
 
 
 def binary_erode(arr: np.ndarray,
                  diameter: float,
-                 pixel_size: Tuple[float, float],
-                 pad_mode: str = 'edge'):
+                 pixel_size: Tuple[float, float] = (1.0, 1.0),
+                 pad_mode: str = 'edge') -> np.ndarray:
     """
     Morphological erosion.
 
@@ -487,13 +599,14 @@ def binary_erode(arr: np.ndarray,
     kernel = _get_kernel(diameter, pixel_size)
     arr = _proper_pad(arr, kernel, pad_mode)
     eroded = cv.erode(arr, kernel)
+
     return _proper_unpad(eroded, kernel).astype(bool)
 
 
 def binary_dilate(arr: np.ndarray,
                   diameter: float,
-                  pixel_size: Tuple[float, float],
-                  pad_mode: str = 'edge'):
+                  pixel_size: Tuple[float, float] = (1.0, 1.0),
+                  pad_mode: str = 'edge') -> np.ndarray:
     """
     Morphological dilation.
 
@@ -510,6 +623,7 @@ def binary_dilate(arr: np.ndarray,
     kernel = _get_kernel(diameter, pixel_size)
     arr = _proper_pad(arr, kernel, pad_mode)
     dilated = cv.dilate(arr, kernel)
+
     return _proper_unpad(dilated, kernel).astype(bool)
 
 
