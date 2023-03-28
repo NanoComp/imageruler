@@ -1,3 +1,6 @@
+
+[![Build Status](https://github.com/NanoComp/imageruler/workflows/CI/badge.svg)](https://github.com/NanoComp/imageruler/actions)
+
 Imageruler is a free Python program to compute minimum length scales of 1d or 2d design patterns given by topology optimization. The method for 2d cases is based on morphological transformations [1,2], which are realized by the OpenCV library [3].
 
 The method for estimating the minimum length scale of solid regions in a 2d design pattern is outlined as follows.
