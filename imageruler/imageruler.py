@@ -7,6 +7,7 @@ threshold = 0.5  # threshold for binarization
 
 def minimum_length_solid(arr: np.ndarray,
                          phys_size: Optional[Tuple[float, ...]] = None,
+                         periodic_axes: Optional[Tuple[float, ...]] = None,
                          margin_size: Optional[Tuple[Tuple[float, float],
                                                      ...]] = None,
                          pad_mode: str = 'solid') -> float:
@@ -16,6 +17,7 @@ def minimum_length_solid(arr: np.ndarray,
     Args:
         arr: A 1d or 2d array that represents a design pattern.
         phys_size: A tuple that represents the physical size of the design pattern.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
@@ -24,7 +26,7 @@ def minimum_length_solid(arr: np.ndarray,
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size)
+        arr, phys_size, periodic_axes)
 
     # If all elements in the array are the same,
     # the code simply regards the shorter side of
@@ -63,6 +65,7 @@ def minimum_length_solid(arr: np.ndarray,
 
 def minimum_length_void(arr: np.ndarray,
                         phys_size: Optional[Tuple[float, ...]] = None,
+                        periodic_axes: Optional[Tuple[float, ...]] = None,
                         margin_size: Optional[Tuple[Tuple[float, float],
                                                     ...]] = None,
                         pad_mode: str = 'void') -> float:
@@ -72,6 +75,7 @@ def minimum_length_void(arr: np.ndarray,
     Args:
         arr: A 1d or 2d array that represents a design pattern.
         phys_size: A tuple that represents the physical size of the design pattern.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
@@ -80,17 +84,18 @@ def minimum_length_void(arr: np.ndarray,
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size)
+        arr, phys_size, periodic_axes)
     if pad_mode == 'solid': pad_mode = 'void'
     elif pad_mode == 'void': pad_mode = 'solid'
     else: pad_mode == 'edge'
 
-    return minimum_length_solid(~arr, phys_size, margin_size, pad_mode)
+    return minimum_length_solid(~arr, phys_size, periodic_axes, margin_size, pad_mode)
 
 
 def minimum_length_solid_void(
     arr: np.ndarray,
     phys_size: Optional[Tuple[float, ...]] = None,
+    periodic_axes: Optional[Tuple[float, ...]] = None,
     margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> Tuple[float, float]:
@@ -100,6 +105,7 @@ def minimum_length_solid_void(
     Args:
         arr: A 1d or 2d array that represents a design pattern.
         phys_size: A tuple that represents the physical size of the design pattern.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for measuring solid and void minimum length scales, respectively.
 
@@ -107,14 +113,15 @@ def minimum_length_solid_void(
         A tuple of two floats that represent the minimum length scales of solid and void regions, respectively. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
     """
 
-    return minimum_length_solid(arr, phys_size, margin_size,
+    return minimum_length_solid(arr, phys_size, periodic_axes, margin_size,
                                 pad_mode[0]), minimum_length_void(
-                                    arr, phys_size, margin_size, pad_mode[1])
+                                    arr, phys_size, periodic_axes, margin_size, pad_mode[1])
 
 
 def minimum_length(
     arr: np.ndarray,
     phys_size: Optional[Tuple[float, ...]] = None,
+    periodic_axes: Optional[Tuple[float, ...]] = None,
     margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> float:
@@ -126,6 +133,7 @@ def minimum_length(
     Args:
         arr: A 1d or 2d array that represents a design pattern.
         phys_size: A tuple that represents the physical size of the design pattern.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
 
@@ -134,7 +142,7 @@ def minimum_length(
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size)
+        arr, phys_size, periodic_axes)
 
     # If all elements in the array are the same,
     # the code simply regards the shorter side of
@@ -318,13 +326,14 @@ def length_violation(
     return _length_violation(arr, diameter, pixel_size, margin_size, pad_mode)
 
 
-def _ruler_initialize(arr, phys_size):
+def _ruler_initialize(arr, phys_size, periodic_axes = None):
     """
     Convert the input array to a Boolean array without redundant dimensions and compute some basic information of the design pattern.
 
     Args:
         arr: An array that represents a design pattern.
         phys_size: A tuple, list, array, or number that represents the physical size of the design pattern.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
 
     Returns:
         A tuple with four elements. The first is a Boolean array obtained by squeezing and binarizing the input array, the second is an array that contains the pixel size, the third is the length of the shorter side of the pixel, and the fourth is the length of the shorter side of the design pattern.
@@ -341,7 +350,7 @@ def _ruler_initialize(arr, phys_size):
         phys_size = phys_size[
             phys_size.nonzero()]  # keep nonzero elements only
     elif isinstance(phys_size, float) or isinstance(phys_size, int):
-        phys_size = np.array([phys_size])
+        phys_size = [phys_size]
     elif phys_size is None:
         phys_size = arr.shape
     else:
@@ -350,12 +359,24 @@ def _ruler_initialize(arr, phys_size):
     assert arr.ndim == len(
         phys_size
     ), 'The physical size and the dimension of the input array do not match.'
+    assert arr.ndim in (1, 2), 'The current version of imageruler only supports 1d and 2d.'
 
     short_entire_side = min(
         phys_size)  # shorter side of the entire design region
     pixel_size = _get_pixel_size(arr, phys_size)
     short_pixel_side = min(pixel_size)  # shorter side of a pixel
     arr = _binarize(arr)  # Boolean array
+
+    if periodic_axes is not None:
+        if arr.ndim == 2:
+            periodic_axes = np.array(periodic_axes)
+            reps = (2 if 0 in periodic_axes else 1, 2 if 1 in periodic_axes else 1)
+            arr = np.tile(arr, reps)
+            phys_size = np.array(phys_size)*reps
+            short_entire_side = min(phys_size)  # shorter side of the entire design region
+        else: # arr.ndim == 1
+            arr = np.tile(arr, 2)
+            short_entire_side *= 2
 
     return arr, pixel_size, short_pixel_side, short_entire_side
 
