@@ -3,6 +3,8 @@
 
 Imageruler is a free Python program to compute minimum length scales of 1d or 2d design patterns given by topology optimization. The method for 2d cases is based on morphological transformations [1,2], which are realized by the OpenCV library [3].
 
+See the [provided example notebook](notebooks/examples.ipynb) and the code documentation.
+
 The method for estimating the minimum length scale of solid regions in a 2d design pattern is outlined as follows.
 1. Binarize the 2d array that represents the design pattern, so that each element is a Boolean value. Let $rho$ denote this binarized array. For ease of description, elements with values `True` and `False` are referred to as solid and void, respectively.
 2. For a kernel given by a disc with the diameter $d$, compute morphological opening $\mathcal{O}_d(\rho)$ and obtain the difference $\mathcal{O}_d(\rho) \oplus \rho$, where $\oplus$ denotes exclusive or.
