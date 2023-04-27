@@ -7,29 +7,31 @@ threshold = 0.5  # threshold for binarization
 
 def minimum_length_solid(arr: np.ndarray,
                          phys_size: Optional[Tuple[float, ...]] = None,
+                         periodic_axes: Optional[Tuple[float, ...]] = None,
                          margin_size: Optional[Tuple[Tuple[float, float],
                                                      ...]] = None,
                          pad_mode: str = 'solid') -> float:
     """
-    Compute the minimum length scale of solid regions in a design pattern.
+    Compute the minimum length scale of solid regions in an image.
 
     Args:
-        arr: A 1d or 2d array that represents a design pattern.
-        phys_size: A tuple that represents the physical size of the design pattern.
+        arr: A 1d or 2d array that represents an image.
+        phys_size: A tuple that represents the physical size of the image.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
     Returns:
-        A float that represents the minimum length scale of solid regions in the design pattern. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
+        A float that represents the minimum length scale of solid regions in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size)
+        arr, phys_size, periodic_axes)
 
     # If all elements in the array are the same,
     # the code simply regards the shorter side of
-    # the entire pattern as the minimum length scale,
-    # regardless of whether the pattern is solid or void.
+    # the entire image as the minimum length scale,
+    # regardless of whether the image is solid or void.
 
     if len(np.unique(arr)) == 1:
         return short_entire_side
@@ -42,14 +44,14 @@ def minimum_length_solid(arr: np.ndarray,
 
     def _interior_pixel_number(diameter, arr):
         """
-        Evaluate whether a design pattern violates a certain length scale.
+        Evaluate whether an image violates a certain length scale.
 
         Args:
             diameter: A float that represents the diameter of the kernel, which acts like a probe.
-            arr: A 2d array that represents a design pattern.
+            arr: A 2d array that represents an image.
 
         Returns:
-            A boolean that indicates whether the difference between the design pattern and its opening happens at the interior of solid regions, with the edge regions specified by `margin_size` disregarded.
+            A boolean that indicates whether the difference between the image and its opening happens at the interior of solid regions, with the edge regions specified by `margin_size` disregarded.
         """
         return _length_violation_solid(arr, diameter, pixel_size, margin_size,
                                        pad_mode).any()
@@ -63,43 +65,47 @@ def minimum_length_solid(arr: np.ndarray,
 
 def minimum_length_void(arr: np.ndarray,
                         phys_size: Optional[Tuple[float, ...]] = None,
+                        periodic_axes: Optional[Tuple[float, ...]] = None,
                         margin_size: Optional[Tuple[Tuple[float, float],
                                                     ...]] = None,
                         pad_mode: str = 'void') -> float:
     """
-    Compute the minimum length scale of void regions in a design pattern.
+    Compute the minimum length scale of void regions in an image.
 
     Args:
-        arr: A 1d or 2d array that represents a design pattern.
-        phys_size: A tuple that represents the physical size of the design pattern.
+        arr: A 1d or 2d array that represents an image.
+        phys_size: A tuple that represents the physical size of the image.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
     Returns:
-        A float that represents the minimum length scale of void regions in the design pattern. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
+        A float that represents the minimum length scale of void regions in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size)
+        arr, phys_size, periodic_axes)
     if pad_mode == 'solid': pad_mode = 'void'
     elif pad_mode == 'void': pad_mode = 'solid'
     else: pad_mode == 'edge'
 
-    return minimum_length_solid(~arr, phys_size, margin_size, pad_mode)
+    return minimum_length_solid(~arr, phys_size, periodic_axes, margin_size, pad_mode)
 
 
 def minimum_length_solid_void(
     arr: np.ndarray,
     phys_size: Optional[Tuple[float, ...]] = None,
+    periodic_axes: Optional[Tuple[float, ...]] = None,
     margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> Tuple[float, float]:
     """
-    Compute the minimum length scales of both solid and void regions in a design pattern.
+    Compute the minimum length scales of both solid and void regions in an image.
 
     Args:
-        arr: A 1d or 2d array that represents a design pattern.
-        phys_size: A tuple that represents the physical size of the design pattern.
+        arr: A 1d or 2d array that represents an image.
+        phys_size: A tuple that represents the physical size of the image.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for measuring solid and void minimum length scales, respectively.
 
@@ -107,39 +113,41 @@ def minimum_length_solid_void(
         A tuple of two floats that represent the minimum length scales of solid and void regions, respectively. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
     """
 
-    return minimum_length_solid(arr, phys_size, margin_size,
+    return minimum_length_solid(arr, phys_size, periodic_axes, margin_size,
                                 pad_mode[0]), minimum_length_void(
-                                    arr, phys_size, margin_size, pad_mode[1])
+                                    arr, phys_size, periodic_axes, margin_size, pad_mode[1])
 
 
 def minimum_length(
     arr: np.ndarray,
     phys_size: Optional[Tuple[float, ...]] = None,
+    periodic_axes: Optional[Tuple[float, ...]] = None,
     margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> float:
     """
-    For 2d design patterns, compute the minimum length scale through the difference between morphological opening and closing.
+    For 2d images, compute the minimum length scale through the difference between morphological opening and closing.
     Ideally, the result should be equal to the smaller one between solid and void minimum length scales.
-    For 1d design patterns, just return this smaller one after comparing solid and void minimum length scales.
+    For 1d images, just return this smaller one after comparing solid and void minimum length scales.
 
     Args:
-        arr: A 1d or 2d array that represents a design pattern.
-        phys_size: A tuple that represents the physical size of the design pattern.
+        arr: A 1d or 2d array that represents an image.
+        phys_size: A tuple that represents the physical size of the image.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
 
     Returns:
-        A float that represents the minimum length scale in the design pattern. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
+        A float that represents the minimum length scale in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size)
+        arr, phys_size, periodic_axes)
 
     # If all elements in the array are the same,
     # the code simply regards the shorter side of
-    # the entire pattern as the minimum length scale,
-    # regardless of whether the pattern is solid or void.
+    # the entire image as the minimum length scale,
+    # regardless of whether the image is solid or void.
 
     if len(np.unique(arr)) == 1:
         return short_entire_side
@@ -154,11 +162,11 @@ def minimum_length(
 
     def _interior_pixel_number(diameter, arr):
         """
-        Evaluate whether a design pattern violates a certain length scale.
+        Evaluate whether an image violates a certain length scale.
 
         Args:
             diameter: A float that represents the diameter of the kernel, which acts like a probe.
-            arr: A 2d array that represents a design pattern.
+            arr: A 2d array that represents an image.
 
         Returns:
             A boolean that indicates whether the difference between opening and closing happens at the regions that exclude the borders between solid and void regions, with the edge regions specified by `margin_size` disregarded.
@@ -180,17 +188,17 @@ def _length_violation_solid(arr: np.ndarray,
                                                         ...]] = None,
                             pad_mode: str = 'solid') -> np.ndarray:
     """
-    Indicates the areas where the length scale violation happens in solid regions of a 2d binary pattern.
+    Indicates the areas where the length scale violation happens in solid regions of a 2d binary image.
 
     Args:
-        arr: A 2d Boolean array that represents a binary design pattern.
+        arr: A 2d Boolean array that represents a binary image.
         diameter: A float that represents the diameter of the structuring element.
         phys_size: A tuple, list, or array of two floats that represents the physical size of one pixel.
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
     Returns:
-        A Boolean array that represents the pattern of solid length scale violation.
+        A Boolean array that represents the image of solid length scale violation.
     """
 
     open_diff = binary_open(arr, diameter, pixel_size, pad_mode) ^ arr
@@ -209,17 +217,17 @@ def _length_violation(
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> np.ndarray:
     """
-    Indicates the areas where the length scale violation happens in solid regions of a 2d binary pattern.
+    Indicates the areas where the length scale violation happens in solid regions of a 2d binary image.
 
     Args:
-        arr: A 2d Boolean array that represents a binary design pattern.
+        arr: A 2d Boolean array that represents a binary image.
         diameter: A float that represents the diameter of the structuring element.
         phys_size: A tuple, list, or array of two floats that represents the physical size of one pixel.
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
 
     Returns:
-        A Boolean array that represents the pattern of solid or void length scale violation.
+        A Boolean array that represents the image of solid or void length scale violation.
     """
 
     close_open_diff = binary_open(arr, diameter, pixel_size,
@@ -239,17 +247,17 @@ def length_violation_solid(arr: np.ndarray,
                                                        ...]] = None,
                            pad_mode: str = 'solid') -> np.ndarray:
     """
-    Indicates the areas where the length scale violation happens in solid regions of a 2d binary pattern.
+    Indicates the areas where the length scale violation happens in solid regions of a 2d image.
 
     Args:
-        arr: A 2d array that represents a design pattern.
+        arr: A 2d array that represents an image.
         diameter: A float that represents the diameter of the kernel.
-        phys_size: A tuple that represents the physical size of the design pattern.
+        phys_size: A tuple that represents the physical size of the image.
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
     Returns:
-        A Boolean array that represents the pattern of solid length scale violation.
+        A Boolean array that represents the image of solid length scale violation.
     """
 
     arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
@@ -265,18 +273,18 @@ def length_violation_void(arr: np.ndarray,
                                                       ...]] = None,
                           pad_mode: str = 'void') -> np.ndarray:
     """
-    Indicates the areas where the length scale violation happens in void regions of a 2d binary pattern.
+    Indicates the areas where the length scale violation happens in void regions of a 2d image.
 
     Args:
-        arr: A 2d array that represents a design pattern.
+        arr: A 2d array that represents an image.
         diameter: A float that represents the diameter of the kernel.
-        phys_size: A tuple that represents the physical size of the design pattern.
+        phys_size: A tuple that represents the physical size of the image.
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
         interior: A Boolean value that indicates whether interfacial pixels of void regions are excluded in the result.
 
     Returns:
-        A Boolean array that represents the pattern of void length scale violation.
+        A Boolean array that represents the image of void length scale violation.
     """
 
     arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
@@ -298,17 +306,17 @@ def length_violation(
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> np.ndarray:
     """
-    Indicates the areas where the length-scale violation happens in a 2d binary pattern.
+    Indicates the areas where the length-scale violation happens in a 2d image.
 
     Args:
-        arr: A 2d array that represents a design pattern.
+        arr: A 2d array that represents an image.
         diameter: A float that represents the diameter of the kernel.
-        phys_size: A tuple that represents the physical size of the design pattern.
+        phys_size: A tuple that represents the physical size of the image.
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
 
     Returns:
-        A Boolean array that represents the pattern of solid or void length scale violation.
+        A Boolean array that represents the image of solid or void length scale violation.
     """
 
     arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
@@ -318,16 +326,17 @@ def length_violation(
     return _length_violation(arr, diameter, pixel_size, margin_size, pad_mode)
 
 
-def _ruler_initialize(arr, phys_size):
+def _ruler_initialize(arr, phys_size, periodic_axes = None):
     """
-    Convert the input array to a Boolean array without redundant dimensions and compute some basic information of the design pattern.
+    Convert the input array to a Boolean array without redundant dimensions and compute some basic information of the image.
 
     Args:
-        arr: An array that represents a design pattern.
-        phys_size: A tuple, list, array, or number that represents the physical size of the design pattern.
+        arr: An array that represents an image.
+        phys_size: A tuple, list, array, or number that represents the physical size of the image.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
 
     Returns:
-        A tuple with four elements. The first is a Boolean array obtained by squeezing and binarizing the input array, the second is an array that contains the pixel size, the third is the length of the shorter side of the pixel, and the fourth is the length of the shorter side of the design pattern.
+        A tuple with four elements. The first is a Boolean array obtained by squeezing and binarizing the input array, the second is an array that contains the pixel size, the third is the length of the shorter side of the pixel, and the fourth is the length of the shorter side of the image.
 
     Raises:
         AssertionError: If the physical size `phys_size` does not have the expected format or the length of `phys_size` does not match the dimension of the input array. 
@@ -341,7 +350,7 @@ def _ruler_initialize(arr, phys_size):
         phys_size = phys_size[
             phys_size.nonzero()]  # keep nonzero elements only
     elif isinstance(phys_size, float) or isinstance(phys_size, int):
-        phys_size = np.array([phys_size])
+        phys_size = [phys_size]
     elif phys_size is None:
         phys_size = arr.shape
     else:
@@ -350,12 +359,24 @@ def _ruler_initialize(arr, phys_size):
     assert arr.ndim == len(
         phys_size
     ), 'The physical size and the dimension of the input array do not match.'
+    assert arr.ndim in (1, 2), 'The current version of imageruler only supports 1d and 2d.'
 
     short_entire_side = min(
         phys_size)  # shorter side of the entire design region
     pixel_size = _get_pixel_size(arr, phys_size)
     short_pixel_side = min(pixel_size)  # shorter side of a pixel
     arr = _binarize(arr)  # Boolean array
+
+    if periodic_axes is not None:
+        if arr.ndim == 2:
+            periodic_axes = np.array(periodic_axes)
+            reps = (2 if 0 in periodic_axes else 1, 2 if 1 in periodic_axes else 1)
+            arr = np.tile(arr, reps)
+            phys_size = np.array(phys_size)*reps
+            short_entire_side = min(phys_size)  # shorter side of the entire design region
+        else: # arr.ndim == 1
+            arr = np.tile(arr, 2)
+            short_entire_side *= 2
 
     return arr, pixel_size, short_pixel_side, short_entire_side
 
@@ -442,7 +463,7 @@ def _get_interior(arr, direction, pad_mode):
     Get inner borders, outer borders, or union of both inner and outer borders of solid regions.
 
     Args:
-        arr: A 2d array that represents a design pattern.
+        arr: A 2d array that represents an image.
         direction: A string that can be "in", "out", or "both" to indicate inner borders, outer borders, and union of inner and outer borders.
 
     Returns:
@@ -473,8 +494,8 @@ def _get_pixel_size(arr, phys_size):
     Compute the physical size of a single pixel.
 
     Args:
-        arr: An array that represents a design pattern.
-        phys_size: A tuple that represents the physical size of the design pattern.
+        arr: An array that represents an image.
+        phys_size: A tuple that represents the physical size of the image.
 
     Returns:
         An array of floats. It represents the physical size of a single pixel.
@@ -489,7 +510,7 @@ def _binarize(arr):
     Binarize the input array according to the threshold.
 
     Args:
-        arr: An array that represents a design pattern.
+        arr: An array that represents an image.
 
     Returns:
         An Boolean array.
@@ -505,7 +526,7 @@ def _get_kernel(diameter, pixel_size):
 
     Args:
         diameter: A float that represents the diameter of the kernel, which acts like a probe.
-        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the design pattern.
+        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the image.
 
     Returns:
         An array of unsigned integers 0 and 1. It represent the kernel for morpological operations.
@@ -539,9 +560,9 @@ def binary_open(arr: np.ndarray,
     Morphological opening.
 
     Args:
-        arr: A binarized 2d array that represents a design pattern.
+        arr: A binarized 2d array that represents a binary image.
         diameter: A float that represents the diameter of the kernel, which acts like a probe.
-        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the design pattern.
+        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the image.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
     Returns:
@@ -563,9 +584,9 @@ def binary_close(arr: np.ndarray,
     Morphological closing.
 
     Args:
-        arr: A binarized 2d array that represents a design pattern.
+        arr: A binarized 2d array that represents a binary image.
         diameter: A float that represents the diameter of the kernel, which acts like a probe.
-        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the design pattern.
+        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the image.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
     Returns:
@@ -587,9 +608,9 @@ def binary_erode(arr: np.ndarray,
     Morphological erosion.
 
     Args:
-        arr: A binarized 2d array that represents a design pattern.
+        arr: A binarized 2d array that represents a binary image.
         diameter: A float that represents the diameter of the kernel, which acts like a probe.
-        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the design pattern.
+        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the image.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
     Returns:
@@ -611,9 +632,9 @@ def binary_dilate(arr: np.ndarray,
     Morphological dilation.
 
     Args:
-        arr: A binarized 2d array that represents a design pattern.
+        arr: A binarized 2d array that represents a binary image.
         diameter: A float that represents the diameter of the kernel, which acts like a probe.
-        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the design pattern.
+        pixel_size: A tuple, list, or array that represents the physical size of one pixel in the image.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
     Returns:
@@ -632,7 +653,7 @@ def _proper_pad(arr, kernel, pad_mode):
     Pad the input array properly according to the size of the kernel.
 
     Args:
-        arr: A binarized 2d array that represents a design pattern.
+        arr: A binarized 2d array that represents a binary image.
         kernel: A 2d array that represents the kernel of morphological operations.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
@@ -710,9 +731,9 @@ def _trim(arr, margin_size, pixel_size):
     Obtain the trimmed array with marginal regions discarded.
 
     Args:
-        arr: A 1d or 2d array that represents a design pattern.
+        arr: A 1d or 2d array that represents an image.
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pixel_size: A tuple that represents the physical size of one pixel in the design pattern.
+        pixel_size: A tuple that represents the physical size of one pixel in the image.
 
     Returns:
         An array that is a portion of the input array.

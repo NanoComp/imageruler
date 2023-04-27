@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 import imageruler
-from imageruler.regular_shapes import disc, rounded_square
+from imageruler.regular_shapes import disc, rounded_square, stripe
 
 resolution = 1
 phys_size = (200, 200)
@@ -54,7 +54,7 @@ class TestDuality(unittest.TestCase):
 
         for angle in range(0, 90, 10):
             print("Rotation angle of the rounded square: ", angle)
-            pattern = rounded_square(resolution, phys_size, 50, angle)
+            pattern = rounded_square(resolution, phys_size, 50, angle=angle)
             for diameter in diameters:
                 print("Kernel diameter: " + str(diameter))
                 assert duality_dilation_erosion(
@@ -110,8 +110,10 @@ class TestMinimumLengthScale(unittest.TestCase):
         delta = 4
 
         for angle in range(0, 90, 10):
-            pattern = rounded_square(resolution, phys_size, declared_mls,
-                                     angle)
+            pattern = rounded_square(resolution,
+                                     phys_size,
+                                     declared_mls,
+                                     angle=angle)
             solid_mls = imageruler.minimum_length_solid(pattern)
             print("Rotation angle of the rounded square: ", angle)
             print("Estimated minimum length scale: ", solid_mls)
@@ -130,7 +132,8 @@ class TestMinimumLengthScale(unittest.TestCase):
         self.assertAlmostEqual(solid_mls, diameter, None, message, delta=1)
 
     def test_ring(self):
-        print("------ Testing minimum length scale on concentric circles ------")
+        print(
+            "------ Testing minimum length scale on concentric circles ------")
         outer_diameter, inner_diameter = 120, 50
         declared_solid_mls, declared_void_mls = (
             outer_diameter - inner_diameter) / 2, inner_diameter
@@ -157,6 +160,21 @@ class TestMinimumLengthScale(unittest.TestCase):
                                min(declared_solid_mls, declared_void_mls),
                                None, message, delta)
         self.assertEqual(dual_mls, min(solid_mls, void_mls))
+
+    def test_periodicity(self):
+        print("------ Testing minimum length scale on a periodic image ------")
+        stripe_width = 50
+        print("Declared minimum length scale: ", stripe_width)
+        pattern = stripe(
+            resolution, phys_size, stripe_width, center=(0, -phys_size[1] / 2)
+        ) | stripe(
+            resolution, phys_size, stripe_width, center=(0, phys_size[1] / 2))
+        solid_mls = imageruler.minimum_length_solid(pattern,
+                                                    phys_size,
+                                                    periodic_axes=1)
+        print("Estimated minimum length scale: ", solid_mls)
+        # check if values are almost equal
+        self.assertAlmostEqual(solid_mls, stripe_width, None, message, delta=1)
 
 
 if __name__ == "__main__":
