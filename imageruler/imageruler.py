@@ -84,7 +84,7 @@ def minimum_length_void(arr: np.ndarray,
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size, periodic_axes)
+        arr, phys_size)
     if pad_mode == 'solid': pad_mode = 'void'
     elif pad_mode == 'void': pad_mode = 'solid'
     else: pad_mode == 'edge'
@@ -243,6 +243,7 @@ def _length_violation(
 def length_violation_solid(arr: np.ndarray,
                            diameter: float,
                            phys_size: Optional[Tuple[float, ...]] = None,
+                           periodic_axes: Optional[Tuple[float, ...]] = None,
                            margin_size: Optional[Tuple[Tuple[float, float],
                                                        ...]] = None,
                            pad_mode: str = 'solid') -> np.ndarray:
@@ -253,6 +254,7 @@ def length_violation_solid(arr: np.ndarray,
         arr: A 2d array that represents an image.
         diameter: A float that represents the diameter of the kernel.
         phys_size: A tuple that represents the physical size of the image.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
 
@@ -260,7 +262,7 @@ def length_violation_solid(arr: np.ndarray,
         A Boolean array that represents the image of solid length scale violation.
     """
 
-    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
+    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size, periodic_axes)
     assert arr.ndim == 2
     return _length_violation_solid(arr, diameter, pixel_size, margin_size,
                                    pad_mode)
@@ -269,6 +271,7 @@ def length_violation_solid(arr: np.ndarray,
 def length_violation_void(arr: np.ndarray,
                           diameter: float,
                           phys_size: Optional[Tuple[float, ...]] = None,
+                          periodic_axes: Optional[Tuple[float, ...]] = None,
                           margin_size: Optional[Tuple[Tuple[float, float],
                                                       ...]] = None,
                           pad_mode: str = 'void') -> np.ndarray:
@@ -279,6 +282,7 @@ def length_violation_void(arr: np.ndarray,
         arr: A 2d array that represents an image.
         diameter: A float that represents the diameter of the kernel.
         phys_size: A tuple that represents the physical size of the image.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
         interior: A Boolean value that indicates whether interfacial pixels of void regions are excluded in the result.
@@ -287,7 +291,7 @@ def length_violation_void(arr: np.ndarray,
         A Boolean array that represents the image of void length scale violation.
     """
 
-    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
+    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size, periodic_axes)
     assert arr.ndim == 2
 
     if pad_mode == 'solid': pad_mode = 'void'
@@ -302,6 +306,7 @@ def length_violation(
     arr: np.ndarray,
     diameter: float,
     phys_size: Optional[Tuple[float, ...]] = None,
+    periodic_axes: Optional[Tuple[float, ...]] = None,
     margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> np.ndarray:
@@ -312,6 +317,7 @@ def length_violation(
         arr: A 2d array that represents an image.
         diameter: A float that represents the diameter of the kernel.
         phys_size: A tuple that represents the physical size of the image.
+        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
 
@@ -319,7 +325,7 @@ def length_violation(
         A Boolean array that represents the image of solid or void length scale violation.
     """
 
-    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size)
+    arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size, periodic_axes)
     assert arr.ndim == 2
     if isinstance(pad_mode, str): pad_mode = (pad_mode, pad_mode)
 
@@ -407,13 +413,13 @@ def _search(arg_range, arg_threshold, function):
             arg = args[1]
             if not function(arg):
                 args[0], args[1] = arg, (arg +
-                                         args[2]) / 2  # radius is too small
+                                         args[2]) / 2  # The current value is too small
             else:
                 args[1], args[2] = (arg +
-                                    args[0]) / 2, arg  # radius is still large
-        return args[1], True  #args[2], True
+                                    args[0]) / 2, arg  # The current value is still large
+        return args[1], True
     elif not function(args[0]) and not function(args[2]):
-        return args[2], False  #args[2], False
+        return args[2], False
     elif function(args[0]) and function(args[2]):
         return args[0], False
     else:
