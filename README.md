@@ -19,12 +19,12 @@ The minimum length scale of $\rho$ is the smaller of the minimum length scales o
 
 For a 1d binary image, the algorithm simply finds the minimum length among all solid or void segments.
 
-## Accuracy
+## Note on Accuracy
 
-The accuracy of the minimum length scale computed by Imageruler is limited by the finite resolution of the input image. A fundamental feature is that length scales smaller than a single pixel cannot be measured. Also, in certain situations, length scales of a few pixels may be indistinguishable from discretization artifacts such as the "staircasing" of curved surfaces. As one example, a sharp 90° corner corresponds to a length scale (radius of curvature) of *zero* at infinite resolution. However, at a finite resolution, a sharp corner will tend to be rounded with a radius of curvature of a few pixels. In this case, the sharp and rounded corners are indistinguishable and thus Imageruler will return a length scale proportional to the pixel size. In general, the measured length scale should be viewed as having an "error bar" on the few-pixel level.
+The accuracy of the minimum length scale computed by Imageruler is limited by the finite resolution of the input image. A fundamental feature is that length scales smaller than a single pixel cannot be measured. Also, in certain situations, length scales of a few pixels may be indistinguishable from discretization artifacts such as the "staircasing" of curved surfaces. As an example, a sharp 90° corner corresponds to a length scale (radius of curvature) of *zero* at infinite resolution. However, at a finite resolution, a sharp corner will tend to be rounded with a radius of curvature of a few pixels. Imageruler will therefore return a length scale proportional to the pixel size. In general, the measured length scale should be viewed as having an "error bar" on the few-pixel level.
 
 ## References
 
-[1] Linus Hägg and Eddie Wadbro, On minimum length scale control in density based topology optimization, Struct. Multidisc Optim. 58(3), 1015–1032 (2018).  
-[2] Rafael C. Gonzalez and Richard E. Woods, Digital Image Processing (Fourth Edition), Chapter 9 (Pearson, 2017).  
-[3] Gary Bradski. The OpenCV Library. Dr. Dobb’s Journal of Software Tools (2000).
+[1] [L. Hägg and E. Wadbro, On minimum length scale control in density based topology optimization, Structural and Multidisciplinary Optimization, Vol. 58, pp. 1015–1032 (2018).](https://doi.org/10.1007/s00158-018-1944-0)
+[2] R. C. Gonzalez and R. E. Woods, Digital Image Processing (Fourth Edition), Chapter 9: Morphological Image Processing, (Pearson, 2017).
+[3] OpenCV: Open Source Computer Vision Library, [https://github.com/opencv/opencv](https://github.com/opencv/opencv).
