@@ -21,7 +21,7 @@ For a 1d binary image, the algorithm simply finds the minimum length among all s
 
 ## Note on Accuracy
 
-The accuracy of the minimum length scale computed by Imageruler is limited by the finite resolution of the input image. A fundamental feature is that length scales smaller than a single pixel cannot be measured. Also, in certain situations, length scales of a few pixels may be indistinguishable from discretization artifacts such as the "staircasing" of curved surfaces. As an example, a sharp 90° corner corresponds to a length scale (radius of curvature) of *zero* at infinite resolution. However, at a finite resolution, a sharp corner will tend to be rounded with a radius of curvature of a few pixels. Imageruler will therefore return a length scale proportional to the pixel size. In general, the measured length scale should be viewed as having an "error bar" on the few-pixel level.
+The accuracy of the minimum length scale computed by Imageruler is limited by the finite resolution of the input image. A fundamental feature is that length scales smaller than a single pixel cannot be measured. Also, in certain situations, length scales of a few pixels may be indistinguishable from discretization artifacts such as the "staircasing" of curved surfaces. As an example, a sharp 90° corner corresponds to a length scale (radius of curvature) of *zero* at infinite resolution. However, at a finite resolution, a sharp corner is indistinguishable from one that is rounded with a radius of curvature of a few pixels. Imageruler will therefore return a length scale proportional to the pixel size rather than zero. In general, the measured length scale should be viewed as having an "error bar" on the few-pixel level.
 
 ## References
 
