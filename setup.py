@@ -9,6 +9,7 @@ def read(rel_path):
     with codecs.open(os.path.join(here, rel_path), 'r') as fp:
         return fp.read()
 
+
 def get_version(rel_path):
     for line in read(rel_path).splitlines():
         if line.startswith('__version__'):
@@ -33,4 +34,6 @@ setuptools.setup(
     url='https://github.com/NanoComp/imageruler',
     packages=setuptools.find_packages(),
     python_requires='>=3',
-)
+    entry_points={"console_scripts": [
+        "imageruler = imageruler.cli:main",
+    ]})
