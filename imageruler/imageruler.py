@@ -1,5 +1,6 @@
 import numpy as np
 import cv2 as cv
+import warnings
 from typing import Tuple, Optional
 
 threshold = 0.5  # threshold for binarization
@@ -383,6 +384,11 @@ def _ruler_initialize(arr, phys_size, periodic_axes = None):
         else: # arr.ndim == 1
             arr = np.tile(arr, 2)
             short_entire_side *= 2
+
+    if arr.ndim == 2:
+        harris = cv.cornerHarris(arr.astype(np.uint8), blockSize=5, ksize=5, k=0.04)
+        if np.max(harris) > 5e-10:
+            warnings.warn("This image may contain sharp corners or cusps.", Warning)
 
     return arr, pixel_size, short_pixel_side, short_entire_side
 
