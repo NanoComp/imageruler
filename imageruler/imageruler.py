@@ -1,7 +1,9 @@
 import numpy as np
 import cv2 as cv
-import warnings
 from typing import Tuple, Optional
+import warnings
+
+warnings.simplefilter("always")
 
 threshold = 0.5  # threshold for binarization
 
@@ -11,7 +13,8 @@ def minimum_length_solid(arr: np.ndarray,
                          periodic_axes: Optional[Tuple[float, ...]] = None,
                          margin_size: Optional[Tuple[Tuple[float, float],
                                                      ...]] = None,
-                         pad_mode: str = 'solid') -> float:
+                         pad_mode: str = 'solid',
+                         warn_cusp: bool = False) -> float:
     """
     Compute the minimum length scale of solid regions in an image.
 
@@ -21,13 +24,14 @@ def minimum_length_solid(arr: np.ndarray,
         periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
+        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
 
     Returns:
         A float that represents the minimum length scale of solid regions in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size, periodic_axes)
+        arr, phys_size, periodic_axes, warn_cusp)
 
     # If all elements in the array are the same,
     # the code simply regards the shorter side of
@@ -52,7 +56,7 @@ def minimum_length_solid(arr: np.ndarray,
             arr: A 2d array that represents an image.
 
         Returns:
-            A boolean that indicates whether the difference between the image and its opening happens at the interior of solid regions, with the edge regions specified by `margin_size` disregarded.
+            A boolean value that indicates whether the difference between the image and its opening happens at the interior of solid regions, with the edge regions specified by `margin_size` disregarded.
         """
         return _length_violation_solid(arr, diameter, pixel_size, margin_size,
                                        pad_mode).any()
@@ -69,7 +73,8 @@ def minimum_length_void(arr: np.ndarray,
                         periodic_axes: Optional[Tuple[float, ...]] = None,
                         margin_size: Optional[Tuple[Tuple[float, float],
                                                     ...]] = None,
-                        pad_mode: str = 'void') -> float:
+                        pad_mode: str = 'void',
+                        warn_cusp: bool = False) -> float:
     """
     Compute the minimum length scale of void regions in an image.
 
@@ -79,6 +84,7 @@ def minimum_length_void(arr: np.ndarray,
         periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
+        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
 
     Returns:
         A float that represents the minimum length scale of void regions in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
@@ -90,16 +96,18 @@ def minimum_length_void(arr: np.ndarray,
     elif pad_mode == 'void': pad_mode = 'solid'
     else: pad_mode == 'edge'
 
-    return minimum_length_solid(~arr, phys_size, periodic_axes, margin_size, pad_mode)
+    return minimum_length_solid(~arr, phys_size, periodic_axes, margin_size,
+                                pad_mode, warn_cusp)
 
 
-def minimum_length_solid_void(
-    arr: np.ndarray,
-    phys_size: Optional[Tuple[float, ...]] = None,
-    periodic_axes: Optional[Tuple[float, ...]] = None,
-    margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
-    pad_mode: Tuple[str, str] = ('solid', 'void')
-) -> Tuple[float, float]:
+def minimum_length_solid_void(arr: np.ndarray,
+                              phys_size: Optional[Tuple[float, ...]] = None,
+                              periodic_axes: Optional[Tuple[float,
+                                                            ...]] = None,
+                              margin_size: Optional[Tuple[Tuple[float, float],
+                                                          ...]] = None,
+                              pad_mode: Tuple[str, str] = ('solid', 'void'),
+                              warn_cusp: bool = False) -> Tuple[float, float]:
     """
     Compute the minimum length scales of both solid and void regions in an image.
 
@@ -109,23 +117,25 @@ def minimum_length_solid_void(
         periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for measuring solid and void minimum length scales, respectively.
+        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
 
     Returns:
         A tuple of two floats that represent the minimum length scales of solid and void regions, respectively. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
     """
 
     return minimum_length_solid(arr, phys_size, periodic_axes, margin_size,
-                                pad_mode[0]), minimum_length_void(
-                                    arr, phys_size, periodic_axes, margin_size, pad_mode[1])
+                                pad_mode[0], warn_cusp), minimum_length_void(
+                                    arr, phys_size, periodic_axes, margin_size,
+                                    pad_mode[1])
 
 
-def minimum_length(
-    arr: np.ndarray,
-    phys_size: Optional[Tuple[float, ...]] = None,
-    periodic_axes: Optional[Tuple[float, ...]] = None,
-    margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
-    pad_mode: Tuple[str, str] = ('solid', 'void')
-) -> float:
+def minimum_length(arr: np.ndarray,
+                   phys_size: Optional[Tuple[float, ...]] = None,
+                   periodic_axes: Optional[Tuple[float, ...]] = None,
+                   margin_size: Optional[Tuple[Tuple[float, float],
+                                               ...]] = None,
+                   pad_mode: Tuple[str, str] = ('solid', 'void'),
+                   warn_cusp: bool = False) -> float:
     """
     For 2d images, compute the minimum length scale through the difference between morphological opening and closing.
     Ideally, the result should be equal to the smaller one between solid and void minimum length scales.
@@ -137,13 +147,14 @@ def minimum_length(
         periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
         margin_size: A tuple that represents the physical size near edges that need to be disregarded.
         pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
+        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
 
     Returns:
         A float that represents the minimum length scale in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
-        arr, phys_size, periodic_axes)
+        arr, phys_size, periodic_axes, warn_cusp)
 
     # If all elements in the array are the same,
     # the code simply regards the shorter side of
@@ -170,7 +181,7 @@ def minimum_length(
             arr: A 2d array that represents an image.
 
         Returns:
-            A boolean that indicates whether the difference between opening and closing happens at the regions that exclude the borders between solid and void regions, with the edge regions specified by `margin_size` disregarded.
+            A boolean value that indicates whether the difference between opening and closing happens at the regions that exclude the borders between solid and void regions, with the edge regions specified by `margin_size` disregarded.
         """
         return _length_violation(arr, diameter, pixel_size, margin_size,
                                  pad_mode).any()
@@ -333,7 +344,7 @@ def length_violation(
     return _length_violation(arr, diameter, pixel_size, margin_size, pad_mode)
 
 
-def _ruler_initialize(arr, phys_size, periodic_axes = None):
+def _ruler_initialize(arr, phys_size, periodic_axes=None, warn_cusp=False):
     """
     Convert the input array to a Boolean array without redundant dimensions and compute some basic information of the image.
 
@@ -341,6 +352,7 @@ def _ruler_initialize(arr, phys_size, periodic_axes = None):
         arr: An array that represents an image.
         phys_size: A tuple, list, array, or number that represents the physical size of the image.
         periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
+        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
 
     Returns:
         A tuple with four elements. The first is a Boolean array obtained by squeezing and binarizing the input array, the second is an array that contains the pixel size, the third is the length of the shorter side of the pixel, and the fourth is the length of the shorter side of the image.
@@ -366,7 +378,8 @@ def _ruler_initialize(arr, phys_size, periodic_axes = None):
     assert arr.ndim == len(
         phys_size
     ), 'The physical size and the dimension of the input array do not match.'
-    assert arr.ndim in (1, 2), 'The current version of imageruler only supports 1d and 2d.'
+    assert arr.ndim in (
+        1, 2), 'The current version of imageruler only supports 1d and 2d.'
 
     short_entire_side = min(
         phys_size)  # shorter side of the entire design region
@@ -377,18 +390,23 @@ def _ruler_initialize(arr, phys_size, periodic_axes = None):
     if periodic_axes is not None:
         if arr.ndim == 2:
             periodic_axes = np.array(periodic_axes)
-            reps = (2 if 0 in periodic_axes else 1, 2 if 1 in periodic_axes else 1)
+            reps = (2 if 0 in periodic_axes else 1,
+                    2 if 1 in periodic_axes else 1)
             arr = np.tile(arr, reps)
-            phys_size = np.array(phys_size)*reps
-            short_entire_side = min(phys_size)  # shorter side of the entire design region
-        else: # arr.ndim == 1
+            phys_size = np.array(phys_size) * reps
+            short_entire_side = min(
+                phys_size)  # shorter side of the entire design region
+        else:  # arr.ndim == 1
             arr = np.tile(arr, 2)
             short_entire_side *= 2
 
-    if arr.ndim == 2:
-        harris = cv.cornerHarris(arr.astype(np.uint8), blockSize=5, ksize=5, k=0.04)
+    if warn_cusp and arr.ndim == 2:
+        harris = cv.cornerHarris(arr.astype(np.uint8),
+                                 blockSize=5,
+                                 ksize=5,
+                                 k=0.04)
         if np.max(harris) > 5e-10:
-            warnings.warn("This image may contain sharp corners or cusps.", Warning)
+            warnings.warn("This image may contain sharp corners or cusps.")
 
     return arr, pixel_size, short_pixel_side, short_entire_side
 
@@ -418,11 +436,11 @@ def _search(arg_range, arg_threshold, function):
         while abs(args[0] - args[2]) > arg_threshold:
             arg = args[1]
             if not function(arg):
-                args[0], args[1] = arg, (arg +
-                                         args[2]) / 2  # The current value is too small
+                args[0], args[1] = arg, (
+                    arg + args[2]) / 2  # The current value is too small
             else:
-                args[1], args[2] = (arg +
-                                    args[0]) / 2, arg  # The current value is still large
+                args[1], args[2] = (
+                    arg + args[0]) / 2, arg  # The current value is still large
         return args[1], True
     elif not function(args[0]) and not function(args[2]):
         return args[2], False
