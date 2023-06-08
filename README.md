@@ -1,6 +1,6 @@
 [![Build Status](https://github.com/NanoComp/imageruler/workflows/CI/badge.svg)](https://github.com/NanoComp/imageruler/actions)
 
-Imageruler is a free Python program to compute the minimum length scale of binarized images which are typically designs produced by topology optimization. The algorithm is based on morphological transformations [1,2] as implemented using the OpenCV library [3]. Imageruler also supports 1d designs.
+Imageruler is a free Python program to compute the minimum length scale of binary images which are typically designs produced by topology optimization. The algorithm is based on morphological transformations [1,2] as implemented using the OpenCV library [3]. Imageruler also supports 1d binary images.
 
 For examples of using Imageruler on a variety of structures, see this [notebook](notebooks/examples.ipynb). Documentation is currently provided by the docstrings. A user manual is under development.
 
@@ -25,6 +25,6 @@ The accuracy of the minimum length scale computed by Imageruler is limited by th
 
 ## References
 
-[1] [L. Hägg and E. Wadbro, On minimum length scale control in density based topology optimization, Structural and Multidisciplinary Optimization, Vol. 58, pp. 1015–1032 (2018).](https://doi.org/10.1007/s00158-018-1944-0)
-[2] R. C. Gonzalez and R. E. Woods, Digital Image Processing (Fourth Edition), Chapter 9: Morphological Image Processing, (Pearson, 2017).
+[1] [L. Hägg and E. Wadbro, On minimum length scale control in density based topology optimization, Structural and Multidisciplinary Optimization, Vol. 58, pp. 1015–1032 (2018).](https://doi.org/10.1007/s00158-018-1944-0)  
+[2] R. C. Gonzalez and R. E. Woods, Digital Image Processing (Fourth Edition), Chapter 9: Morphological Image Processing, (Pearson, 2017).  
 [3] OpenCV: Open Source Computer Vision Library, [https://github.com/opencv/opencv](https://github.com/opencv/opencv).
