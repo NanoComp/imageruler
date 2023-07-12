@@ -23,7 +23,7 @@ setuptools.setup(
     name='imageruler',
     version=get_version('imageruler/__init__.py'),
     license='MIT',
-    author='Wenchao Ma and other contributors',
+    author='Wenchao Ma, Ian Alexander Durant Williamson, Martin Friedrich Schubert, Ardavan Oskooi, and Steven Glenn Johnson',
     author_email='mawc@mit.edu',
     install_requires=[
         'numpy',
