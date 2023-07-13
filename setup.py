@@ -23,8 +23,8 @@ setuptools.setup(
     name='imageruler',
     version=get_version('imageruler/__init__.py'),
     license='MIT',
-    author='Wenchao Ma, Ian Alexander Durant Williamson, Martin Friedrich Schubert, Ardavan Oskooi, and Steven Glenn Johnson',
-    author_email='mawc@mit.edu, stevenj@math.mit.edu',
+    author='Wenchao Ma, Ian A. D. Williamson, Martin F. Schubert, Ardavan Oskooi, and Steven G. Johnson',
+    author_email='mawc@mit.edu, stevenj@mit.edu',
     install_requires=[
         'numpy',
         'opencv-python',
