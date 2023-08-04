@@ -796,7 +796,7 @@ def _proper_unpad(arr, kernel):
 
 
 def _trim(arr: np.ndarray, margin_size: Tuple, pixel_size: Tuple) -> np.ndarray:
-    """Returns the array with the boundaries removed.
+    """Returns the array with the margins removed.
 
     Args:
         arr: The image as a 1d or 2d array.
@@ -829,7 +829,7 @@ def _trim(arr: np.ndarray, margin_size: Tuple, pixel_size: Tuple) -> np.ndarray:
         int)  # numbers of pixels of marginal regions
 
     if (np.array(arr.shape)[0:margin_dim] -
-        np.sum(margin_number, axis=1) < 2).all()):
+        np.sum(margin_number, axis=1) < 2).all():
         raise AssertionError("The design region is too narrow or contains "
                              "margins which are too wide.")
 
