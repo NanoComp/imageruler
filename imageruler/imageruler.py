@@ -1,7 +1,8 @@
-import numpy as np
-import cv2 as cv
 from typing import Tuple, Optional
 import warnings
+
+import cv2 as cv
+import numpy as np
 
 warnings.simplefilter("always")
 
@@ -15,29 +16,32 @@ def minimum_length_solid(arr: np.ndarray,
                                                      ...]] = None,
                          pad_mode: str = 'solid',
                          warn_cusp: bool = False) -> float:
-    """
-    Compute the minimum length scale of solid regions in an image.
+    """Computes the minimum length scale of the solid regions of an image.
 
     Args:
-        arr: A 1d or 2d array that represents an image.
-        phys_size: A tuple that represents the physical size of the image.
-        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
-        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
+        arr: The image as a 1d or 2d array.
+        phys_size: The physical dimensions of the image. Default is None.
+        periodic_axes: The axes which are periodic. x is 0 and y is 1.
+            Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode. One of
+            'solid', 'void', or 'edge'. Default is 'solid'.
+        warn_cusp: Whether to warn about the presence of sharp corners or
+            cusps detected in the image. Default is False (no warning).
 
     Returns:
-        A float that represents the minimum length scale of solid regions in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
+        The minimum length scale of the solid regions. The units are the same
+        as `phys_size`. If `phys_size` is None, the units are in number of
+        pixels.
     """
 
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
         arr, phys_size, periodic_axes, warn_cusp)
 
-    # If all elements in the array are the same,
-    # the code simply regards the shorter side of
-    # the entire image as the minimum length scale,
-    # regardless of whether the image is solid or void.
-
+    # If all of the elements in the array are the same,
+    # the shorter length of the image is considered to
+    # be its minimum length scale.
     if len(np.unique(arr)) == 1:
         return short_entire_side
 
@@ -47,16 +51,19 @@ def minimum_length_solid(arr: np.ndarray,
         solid_min_length, _ = _minimum_length_1d(arr)
         return solid_min_length * short_pixel_side
 
-    def _interior_pixel_number(diameter, arr):
-        """
-        Evaluate whether an image violates a certain length scale.
+    def _interior_pixel_number(diameter: float, arr: np.ndarray) -> bool:
+        """Determines whether an image violates a given length scale.
+
+        The violation is based on whether the difference between the image and
+        its morphological opening is nonzero in the interior of the solid
+        regions.
 
         Args:
-            diameter: A float that represents the diameter of the kernel, which acts like a probe.
-            arr: A 2d array that represents an image.
+            diameter: The diameter of the kernel (or "probe").
+            arr: The image as a 2d array.
 
         Returns:
-            A boolean value that indicates whether the difference between the image and its opening happens at the interior of solid regions, with the edge regions specified by `margin_size` disregarded.
+            True if a violation is detected, False otherwise.
         """
         return _length_violation_solid(arr, diameter, pixel_size, margin_size,
                                        pad_mode).any()
@@ -75,21 +82,25 @@ def minimum_length_void(arr: np.ndarray,
                                                     ...]] = None,
                         pad_mode: str = 'void',
                         warn_cusp: bool = False) -> float:
-    """
-    Compute the minimum length scale of void regions in an image.
+    """Computes the minimum length scale of the void regions in an image.
 
     Args:
-        arr: A 1d or 2d array that represents an image.
-        phys_size: A tuple that represents the physical size of the image.
-        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
-        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
+        arr: The image as a 1d or 2d array.
+        phys_size: The physical dimensions of the image. Default is None.
+        periodic_axes: The axes which are periodic. x is 0 and y is 1.
+            Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode. One of
+            'solid', 'void', or 'edge'. Default is 'solid'.
+        warn_cusp: Whether to warn about the presence of sharp corners or
+            cusps detected in the image. Default is False (no warning).
 
     Returns:
-        A float that represents the minimum length scale of void regions in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
+        The minimum length scale of the void regions. The units are the same
+        as `phys_size`. If `phys_size` is None, the units are in number of
+        pixels.
     """
-
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
         arr, phys_size)
     if pad_mode == 'solid': pad_mode = 'void'
@@ -108,21 +119,27 @@ def minimum_length_solid_void(arr: np.ndarray,
                                                           ...]] = None,
                               pad_mode: Tuple[str, str] = ('solid', 'void'),
                               warn_cusp: bool = False) -> Tuple[float, float]:
-    """
-    Compute the minimum length scales of both solid and void regions in an image.
+    """Computes the minimum length scale of an image.
 
     Args:
-        arr: A 1d or 2d array that represents an image.
-        phys_size: A tuple that represents the physical size of the image.
-        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A tuple of two strings that represent the padding modes for measuring solid and void minimum length scales, respectively.
-        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
+        arr: The image as a 1d or 2d array.
+        phys_size: The physical dimensions of the image. Default is None.
+        periodic_axes: The axes which are periodic. x is 0 and y is 1.
+            Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode, which can be
+            'solid', 'void', or 'edge'. Default is 'solid'.
+        warn_cusp: A boolean value that specifies whether to warn about sharp
+            corners or cusps. If True, a warning will be given when arr
+            is likely to contain sharp corners or cusps. Default is False
+            (no warning).
 
     Returns:
-        A tuple of two floats that represent the minimum length scales of solid and void regions, respectively. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
+        The minimum length scale of the solid and void regions in the same unit
+        as `phys_size`. If `phys_size` is None, the units are in number of
+        pixels.
     """
-
     return minimum_length_solid(arr, phys_size, periodic_axes, margin_size,
                                 pad_mode[0], warn_cusp), minimum_length_void(
                                     arr, phys_size, periodic_axes, margin_size,
@@ -136,31 +153,38 @@ def minimum_length(arr: np.ndarray,
                                                ...]] = None,
                    pad_mode: Tuple[str, str] = ('solid', 'void'),
                    warn_cusp: bool = False) -> float:
-    """
-    For 2d images, compute the minimum length scale through the difference between morphological opening and closing.
-    Ideally, the result should be equal to the smaller one between solid and void minimum length scales.
-    For 1d images, just return this smaller one after comparing solid and void minimum length scales.
+    """Computes the minimum length scale of an image.
+
+    This is the smaller of the minimum length scale of the solid and void
+    regions. For a 2d image, this is computed using the difference between
+    morphological opening and closing. For a 1d image, this is computed using
+    a brute-force search.
 
     Args:
-        arr: A 1d or 2d array that represents an image.
-        phys_size: A tuple that represents the physical size of the image.
-        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
-        warn_cusp: A boolean value that determines whether to warn about sharp corners or cusps. If True, warning will be given when the input 2d image is likely to contain sharp corners or cusps; if False, warning will not be given.
+        arr: The image as a 1d or 2d array.
+        phys_size: The physical dimensions of the image. Default is None.
+        periodic_axes: The axes which are periodic. x is 0 and y is 1.
+            Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode, which can be
+            'solid', 'void', or 'edge'. Default is 'solid'.
+        warn_cusp: A boolean value that specifies whether to warn about sharp
+            corners or cusps. If True, a warning will be given when arr
+            is likely to contain sharp corners or cusps. Default is no
+            warning (False).
 
     Returns:
-        A float that represents the minimum length scale in the image. The unit is the same as that of `phys_size`. If `phys_size` is None, return the minimum length scale in the number of pixels.
+        The minimum length scale of the solid and void regions in the same unit
+        as `phys_size`. If `phys_size` is None, the units are in number of
+        pixels.
     """
-
     arr, pixel_size, short_pixel_side, short_entire_side = _ruler_initialize(
         arr, phys_size, periodic_axes, warn_cusp)
 
-    # If all elements in the array are the same,
-    # the code simply regards the shorter side of
-    # the entire image as the minimum length scale,
-    # regardless of whether the image is solid or void.
-
+    # If all of the elements in the array are the same,
+    # the shorter length of the image is considered to
+    # be its minimum length scale.
     if len(np.unique(arr)) == 1:
         return short_entire_side
 
@@ -172,16 +196,19 @@ def minimum_length(arr: np.ndarray,
 
     if isinstance(pad_mode, str): pad_mode = (pad_mode, pad_mode)
 
-    def _interior_pixel_number(diameter, arr):
-        """
-        Evaluate whether an image violates a certain length scale.
+    def _interior_pixel_number(diameter: float, arr: np.ndarray) -> bool:
+        """Determines whether an image violates a given length scale.
+
+        The violation is based on whether the difference between the image and
+        its morphological opening is nonzero in the interior of the solid
+        regions.
 
         Args:
-            diameter: A float that represents the diameter of the kernel, which acts like a probe.
-            arr: A 2d array that represents an image.
+            diameter: The diameter of the kernel (or "probe").
+            arr: The image as a 2d array.
 
         Returns:
-            A boolean value that indicates whether the difference between opening and closing happens at the regions that exclude the borders between solid and void regions, with the edge regions specified by `margin_size` disregarded.
+            True if a violation is detected, False otherwise.
         """
         return _length_violation(arr, diameter, pixel_size, margin_size,
                                  pad_mode).any()
@@ -199,18 +226,20 @@ def _length_violation_solid(arr: np.ndarray,
                             margin_size: Optional[Tuple[Tuple[float, float],
                                                         ...]] = None,
                             pad_mode: str = 'solid') -> np.ndarray:
-    """
-    Indicates the areas where the length scale violation happens in solid regions of a 2d binary image.
+    """Identifies the solid subregions which contain length scale violations.
 
     Args:
-        arr: A 2d Boolean array that represents a binary image.
-        diameter: A float that represents the diameter of the structuring element.
-        phys_size: A tuple, list, or array of two floats that represents the physical size of one pixel.
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
+        arr: The image as a 2d array.
+        diameter: The diameter of the kernel (or "probe").
+        phys_size: The physical dimensions of the image. Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode, which can be
+            'solid', 'void', or 'edge'. Default is 'solid'.
 
     Returns:
-        A Boolean array that represents the image of solid length scale violation.
+        A 2d array of the violations. The array dimensions are the same as the
+        original image.
     """
 
     open_diff = binary_open(arr, diameter, pixel_size, pad_mode) ^ arr
@@ -228,18 +257,20 @@ def _length_violation(
     margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> np.ndarray:
-    """
-    Indicates the areas where the length scale violation happens in solid regions of a 2d binary image.
+    """Identifies the subregions which contain length scale violations.
 
     Args:
-        arr: A 2d Boolean array that represents a binary image.
-        diameter: A float that represents the diameter of the structuring element.
-        phys_size: A tuple, list, or array of two floats that represents the physical size of one pixel.
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
+        arr: The image as a 2d array.
+        diameter: The diameter of the kernel (or "probe").
+        phys_size: The physical dimensions of the image. Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode, which can be
+            'solid', 'void', or 'edge'. Default is 'solid'.
 
     Returns:
-        A Boolean array that represents the image of solid or void length scale violation.
+        A 2d array of the violations. The array dimensions are the same as the
+        original image.
     """
 
     close_open_diff = binary_open(arr, diameter, pixel_size,
@@ -259,19 +290,22 @@ def length_violation_solid(arr: np.ndarray,
                            margin_size: Optional[Tuple[Tuple[float, float],
                                                        ...]] = None,
                            pad_mode: str = 'solid') -> np.ndarray:
-    """
-    Indicates the areas where the length scale violation happens in solid regions of a 2d image.
+    """Identifies the solid subregions which contain length scale violations.
 
     Args:
-        arr: A 2d array that represents an image.
-        diameter: A float that represents the diameter of the kernel.
-        phys_size: A tuple that represents the physical size of the image.
-        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
+        arr: The image as a 2d array.
+        diameter: The diameter of the kernel (or "probe").
+        phys_size: The physical dimensions of the image. Default is None.
+        periodic_axes: The axes which are periodic. x is 0 and y is 1.
+            Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode, which can be
+            'solid', 'void', or 'edge'. Default is 'solid'.
 
     Returns:
-        A Boolean array that represents the image of solid length scale violation.
+        A 2d array of the violations. The array dimensions are the same as the
+        original image.
     """
 
     arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size, periodic_axes)
@@ -287,20 +321,22 @@ def length_violation_void(arr: np.ndarray,
                           margin_size: Optional[Tuple[Tuple[float, float],
                                                       ...]] = None,
                           pad_mode: str = 'void') -> np.ndarray:
-    """
-    Indicates the areas where the length scale violation happens in void regions of a 2d image.
+    """Identifies the void subregions which contain length scale violations.
 
     Args:
-        arr: A 2d array that represents an image.
-        diameter: A float that represents the diameter of the kernel.
-        phys_size: A tuple that represents the physical size of the image.
-        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A string that represents the padding mode, which can be 'solid', 'void', or 'edge'.
-        interior: A Boolean value that indicates whether interfacial pixels of void regions are excluded in the result.
+        arr: The image as a 2d array.
+        diameter: The diameter of the kernel (or "probe").
+        phys_size: The physical dimensions of the image. Default is None.
+        periodic_axes: The axes which are periodic. x is 0 and y is 1.
+            Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode, which can be
+            'solid', 'void', or 'edge'. Default is 'solid'.
 
     Returns:
-        A Boolean array that represents the image of void length scale violation.
+        A 2d array of the violations. The array dimensions are the same as the
+        original image.
     """
 
     arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size, periodic_axes)
@@ -322,19 +358,22 @@ def length_violation(
     margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
     pad_mode: Tuple[str, str] = ('solid', 'void')
 ) -> np.ndarray:
-    """
-    Indicates the areas where the length-scale violation happens in a 2d image.
+    """Identifies the subregions which contain length scale violations.
 
     Args:
-        arr: A 2d array that represents an image.
-        diameter: A float that represents the diameter of the kernel.
-        phys_size: A tuple that represents the physical size of the image.
-        periodic_axes: A tuple of axes (x, y = 0, 1) treated as periodic (default is None: all axes are non-periodic).
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pad_mode: A tuple of two strings that represent the padding modes for morphological opening and closing, respectively.
+        arr: The image as a 2d array.
+        diameter: The diameter of the kernel (or "probe").
+        phys_size: The physical dimensions of the image. Default is None.
+        periodic_axes: The axes which are periodic. x is 0 and y is 1.
+            Default is None.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. Default is None.
+        pad_mode: A string that represents the padding mode, which can be
+            'solid', 'void', or 'edge'. Default is 'solid'.
 
     Returns:
-        A Boolean array that represents the image of solid or void length scale violation.
+        A 2d array of the violations. The array dimensions are the same as the
+        original image.
     """
 
     arr, pixel_size, _, _ = _ruler_initialize(arr, phys_size, periodic_axes)
@@ -358,7 +397,7 @@ def _ruler_initialize(arr, phys_size, periodic_axes=None, warn_cusp=False):
         A tuple with four elements. The first is a Boolean array obtained by squeezing and binarizing the input array, the second is an array that contains the pixel size, the third is the length of the shorter side of the pixel, and the fourth is the length of the shorter side of the image.
 
     Raises:
-        AssertionError: If the physical size `phys_size` does not have the expected format or the length of `phys_size` does not match the dimension of the input array. 
+        AssertionError: If the physical size `phys_size` does not have the expected format or the length of `phys_size` does not match the dimension of the input array.
     """
 
     arr = np.squeeze(arr)
@@ -756,20 +795,22 @@ def _proper_unpad(arr, kernel):
     return arr[slices]
 
 
-def _trim(arr, margin_size, pixel_size):
-    """
-    Obtain the trimmed array with marginal regions discarded.
+def _trim(arr: np.ndarray, margin_size: Tuple, pixel_size: Tuple) -> np.ndarray:
+    """Returns the array with the margins removed.
 
     Args:
-        arr: A 1d or 2d array that represents an image.
-        margin_size: A tuple that represents the physical size near edges that need to be disregarded.
-        pixel_size: A tuple that represents the physical size of one pixel in the image.
+        arr: The image as a 1d or 2d array.
+        margin_size: The physical dimensions of the image margins. If specified,
+            this subregion is excluded from the result. No default.
+        pixel_size: The physical size of one pixel in the image. No default.
 
     Returns:
-        An array that is a portion of the input array.
+        A subarray of the input array.
 
     Raises:
-        AssertionError: If `margin_size` implies more dimensions than the dimension of the input array `arr`, or the regions to be disregarded is too wide.
+        AssertionError: If `margin_size` implies more dimensions than the
+            dimension of the input array `arr`, or the regions to be
+            disregarded is too wide.
     """
 
     arr = np.squeeze(arr)
@@ -777,7 +818,9 @@ def _trim(arr, margin_size, pixel_size):
     margin_size = abs(np.reshape(margin_size, (-1, 2)))
     margin_dim = len(margin_size)
 
-    assert margin_dim <= arr_dim, 'The number of rows of margin_size should not exceeds the dimension of the input array.'
+    if margin_dim > arr_dim:
+        raise AssertionError("The number of rows of margin_size should not "
+                             "exceed the dimension of the input array.")
 
     margin_number = np.array(
         margin_size) / pixel_size[0:len(margin_size)].reshape(
@@ -785,8 +828,10 @@ def _trim(arr, margin_size, pixel_size):
     margin_number = np.round(margin_number).astype(
         int)  # numbers of pixels of marginal regions
 
-    assert (np.array(arr.shape)[0:margin_dim] - np.sum(margin_number, axis=1)
-            >= 2).all(), 'Too wide margin or too narrow design region.'
+    if (np.array(arr.shape)[0:margin_dim] -
+        np.sum(margin_number, axis=1) < 2).all():
+        raise AssertionError("The design region is too narrow or contains "
+                             "margins which are too wide.")
 
     if margin_dim == 1:
         return arr[margin_number[0][0]:-margin_number[0][1]]
@@ -794,4 +839,4 @@ def _trim(arr, margin_size, pixel_size):
         return arr[margin_number[0][0]:-margin_number[0][1],
                    margin_number[1][0]:-margin_number[1][1]]
     else:
-        AssertionError("The input array has too many dimensions.")
+        raise AssertionError("The input array has too many dimensions.")
