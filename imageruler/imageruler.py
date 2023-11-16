@@ -547,7 +547,11 @@ def _minimum_length_1d(array: np.ndarray) -> Tuple[int, int]:
   return solid_min_length, void_min_length
 
 
-def _get_interior(array: np.ndarray, direction: str, pad_mode: PaddingMode):
+def _get_interior(
+    array: np.ndarray,
+    direction: str,
+    pad_mode: Union[PaddingMode, Tuple[PaddingMode, PaddingMode]],
+):
   """Gets inner borders, outer borders, or union of inner and outer borders.
 
   Args:
