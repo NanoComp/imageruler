@@ -1,7 +1,7 @@
 """Imageruler for measuring minimum lengthscales in binary images."""
 
 import enum
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Union
 import warnings
 import cv2 as cv
 import numpy as np
@@ -163,7 +163,7 @@ def minimum_length(
     phys_size: Optional[PhysicalSize] = None,
     periodic_axes: Optional[PeriodicAxes] = None,
     margin_size: Optional[MarginSize] = None,
-    pad_mode: PaddingMode | Tuple[PaddingMode, PaddingMode] = (
+    pad_mode: Union[PaddingMode, Tuple[PaddingMode, PaddingMode]] = (
         PaddingMode.SOLID,
         PaddingMode.VOID,
     ),
