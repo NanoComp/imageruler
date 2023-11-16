@@ -5,6 +5,7 @@ __version__ = '1.0'
 import imageruler.imageruler
 import imageruler.regular_shapes
 from .imageruler import (
+    PaddingMode,
     binary_close,
     binary_dilate,
     binary_erode,
