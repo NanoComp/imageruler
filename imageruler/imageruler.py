@@ -1,7 +1,7 @@
 """Imageruler for measuring minimum lengthscales in binary images."""
 
 import enum
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 import warnings
 import cv2 as cv
 import numpy as np
@@ -74,7 +74,7 @@ def minimum_length_solid(
     ).any()
 
   min_len, _ = _search(
-      [short_pixel_side, short_entire_side],
+      (short_pixel_side, short_entire_side),
       min(pixel_size) / 2,
       lambda d: _interior_pixel_number(d, array),
   )
@@ -219,7 +219,7 @@ def minimum_length(
     ).any()
 
   min_len, _ = _search(
-      [short_pixel_side, short_entire_side],
+      (short_pixel_side, short_entire_side),
       min(pixel_size) / 2,
       lambda d: _interior_pixel_number(d, array),
   )
@@ -380,7 +380,7 @@ def _ruler_initialize(
     phys_size: PhysicalSize,
     periodic_axes: Optional[PeriodicAxes] = None,
     warn_cusp: bool = False,
-):
+) -> Tuple[np.ndarray, PixelSize, float, float]:
   """Initializes the ruler.
 
   This function converts the input array to a boolean array without redundant
@@ -404,7 +404,7 @@ def _ruler_initialize(
       the pixel, and the fourth is the length of the shorter side of the image.
 
   Raises:
-      AssertionError: If the physical size `phys_size` does not have the
+      ValueError: If the physical size `phys_size` does not have the
       expected format or the length of `phys_size` does not match the dimension
       of the input array.
   """
@@ -423,7 +423,7 @@ def _ruler_initialize(
   elif phys_size is None:
     phys_size = array.shape
   else:
-    raise AssertionError('Invalid format of the physical size.')
+    raise ValueError('Invalid format of the physical size.')
 
   assert array.ndim == len(
       phys_size
@@ -461,7 +461,11 @@ def _ruler_initialize(
   return array, pixel_size, short_pixel_side, short_entire_side
 
 
-def _search(arg_range, arg_threshold, function):
+def _search(
+    arg_range: Tuple[float, float],
+    arg_threshold: float,
+    function: Callable[[float], bool],
+) -> Tuple[float, bool]:
   """Binary search.
 
   Args:
@@ -478,7 +482,7 @@ def _search(arg_range, arg_threshold, function):
       the beginning.
 
   Raises:
-      AssertionError: If `function` returns True at a smaller input viariable
+      RuntimeError: If `function` returns True at a smaller input viariable
       but False at a larger input viariable.
   """
 
@@ -502,29 +506,29 @@ def _search(arg_range, arg_threshold, function):
   elif function(args[0]) and function(args[2]):
     return args[0], False
   else:
-    raise AssertionError('The function is not monotonically increasing.')
+    raise RuntimeError('The function is not monotonically increasing.')
 
 
-def _minimum_length_1d(arr):
+def _minimum_length_1d(array: np.ndarray) -> Tuple[int, int]:
   """Search the minimum lengths of solid and void segments in a 1d array.
 
   Args:
-      arr: A 1d Boolean array.
+    array: A 1d Boolean array.
 
   Returns:
-      A tuple of two integers. The first and second intergers represent the
-        numbers of pixels in the shortest solid and void segments, respectively.
+    A tuple of two integers. The first and second intergers represent the
+    numbers of pixels in the shortest solid and void segments, respectively.
   """
 
-  arr = np.append(arr, ~arr[-1])
+  array = np.append(array, ~array[-1])
   solid_lengths, void_lengths = [], []
   counter = 0
 
-  for idx in range(len(arr) - 1):
+  for idx in range(len(array) - 1):
     counter += 1
 
-    if arr[idx] != arr[idx + 1]:
-      if arr[idx]:
+    if array[idx] != array[idx + 1]:
+      if array[idx]:
         solid_lengths.append(counter)
       else:
         void_lengths.append(counter)
@@ -543,11 +547,11 @@ def _minimum_length_1d(arr):
   return solid_min_length, void_min_length
 
 
-def _get_interior(arr, direction, pad_mode):
+def _get_interior(array: np.ndarray, direction: str, pad_mode: PaddingMode):
   """Gets inner borders, outer borders, or union of inner and outer borders.
 
   Args:
-    arr: A 2d array that represents an image.
+    array: A 2d array that represents an image.
     direction: A string that can be "in", "out", or "both" to indicate inner
       borders, outer borders, and union of inner and outer borders.
     pad_mode: The padding mode to use.
@@ -556,30 +560,30 @@ def _get_interior(arr, direction, pad_mode):
       A Boolean array in which all True elements are at and only at borders.
 
   Raises:
-      AssertionError: If the option provided to `direction` is not 'in', 'out',
+      ValueError: If the option provided to `direction` is not 'in', 'out',
       or 'both'.
   """
 
-  pixel_size = (1,) * arr.ndim
+  pixel_size = (1,) * array.ndim
   # With this pixel size and diameter, the resulting kernel has the shape of a
   # plus sign.
   diameter = 2.8
 
   if direction == 'in':  # interior of solid regions
-    return binary_erode(arr, diameter, pixel_size, pad_mode)
+    return binary_erode(array, diameter, pixel_size, pad_mode)
   elif direction == 'out':  # interior of void regions
-    return ~binary_dilate(arr, diameter, pixel_size, pad_mode)
+    return ~binary_dilate(array, diameter, pixel_size, pad_mode)
   elif direction == 'both':  # union of interiors of solid and void regions
-    eroded = binary_erode(arr, diameter, pixel_size, pad_mode[0])
-    dilated = binary_dilate(arr, diameter, pixel_size, pad_mode[1])
+    eroded = binary_erode(array, diameter, pixel_size, pad_mode[0])
+    dilated = binary_dilate(array, diameter, pixel_size, pad_mode[1])
     return ~dilated | eroded
   else:
-    raise AssertionError(
+    raise ValueError(
         'The direction at the border can only be in, out, or both.'
     )
 
 
-def _get_pixel_size(array: np.ndarray, phys_size: PhysicalSize):
+def _get_pixel_size(array: np.ndarray, phys_size: PhysicalSize) -> PixelSize:
   """Compute the physical size of a single pixel.
 
   Args:
@@ -589,11 +593,7 @@ def _get_pixel_size(array: np.ndarray, phys_size: PhysicalSize):
   Returns:
       An array of floats. It represents the physical size of a single pixel.
   """
-
-  squeeze_shape = np.array(np.squeeze(array).shape)
-  return (
-      phys_size / squeeze_shape
-  )  # sizes of a pixel along all finite-thickness directions
+  return tuple(p / s for p, s in zip(phys_size, array.shape))
 
 
 def _binarize(array: np.ndarray) -> np.ndarray:
