@@ -729,7 +729,7 @@ def get_kernel(
     raise ValueError(f'Unknown kernel shape: {kernel_shape.name}.')
 
 
-def _get_padding_for_kernel(kernel: Array) -> tuple[Padding, Padding]:
+def _get_padding_for_kernel(kernel: Array) -> Tuple[Padding, Padding]:
   """Gets padding and unpadding width for a given kernel."""
   shape = kernel.shape
   pad_width = ((shape[0],) * 2, (shape[1],) * 2)
