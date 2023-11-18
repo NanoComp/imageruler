@@ -30,10 +30,11 @@ class TestDuality(unittest.TestCase):
     Returns:
         A Boolean indicating whether duality is satisfied or not.
     """
-    erosion_of_negation = imageruler.binary_erode(~weights, diam)
-    negation_of_dilation = ~imageruler.binary_dilate(weights, diam)
-    dilation_of_negation = imageruler.binary_dilate(~weights, diam)
-    negation_of_erosion = ~imageruler.binary_erode(weights, diam)
+    kernel = imageruler.get_kernel(diam)
+    erosion_of_negation = imageruler.binary_erode(~weights, kernel)
+    negation_of_dilation = ~imageruler.binary_dilate(weights, kernel)
+    dilation_of_negation = imageruler.binary_dilate(~weights, kernel)
+    negation_of_erosion = ~imageruler.binary_erode(weights, kernel)
     return (erosion_of_negation == negation_of_dilation).all() and (
         negation_of_erosion == dilation_of_negation
     ).all()
@@ -50,10 +51,11 @@ class TestDuality(unittest.TestCase):
     Returns:
         A Boolean indicating whether duality is satisfied or not.
     """
-    opening_of_negation = imageruler.binary_open(~weights, diam)
-    negation_of_closing = ~imageruler.binary_close(weights, diam)
-    closing_of_negation = imageruler.binary_close(~weights, diam)
-    negation_of_opening = ~imageruler.binary_open(weights, diam)
+    kernel = imageruler.get_kernel(diam)
+    opening_of_negation = imageruler.binary_open(~weights, kernel)
+    negation_of_closing = ~imageruler.binary_close(weights, kernel)
+    closing_of_negation = imageruler.binary_close(~weights, kernel)
+    negation_of_opening = ~imageruler.binary_open(weights, kernel)
     return (opening_of_negation == negation_of_closing).all() and (
         closing_of_negation == negation_of_opening
     ).all()
