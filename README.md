@@ -1,6 +1,6 @@
 [![Build Status](https://github.com/NanoComp/imageruler/workflows/CI/badge.svg)](https://github.com/NanoComp/imageruler/actions)
 
-Imageruler is a free Python program to compute the minimum length scale of binary images which are typically designs produced by topology optimization. The algorithm is based on morphological transformations [1,2] as implemented using the OpenCV library [3]. Imageruler also supports 1d binary images.
+Imageruler is a free Python program to compute the minimum length scale of binary images which are typically designs produced by topology optimization. The algorithm is described in Section 2 of [J. Optical Society of America B, Vol. 42, pp. A161-A176 (2024)](https://opg.optica.org/josab/abstract.cfm?uri=josab-41-2-A161) and is based on morphological transformations implemented using [OpenCV](https://github.com/opencv/opencv). Imageruler also supports 1d binary images.
 
 For examples of using Imageruler on a variety of structures, see this [notebook](notebooks/examples.ipynb). Documentation is currently provided by the docstrings. A user manual is under development.
 
@@ -22,9 +22,3 @@ For a 1d binary image, the algorithm simply finds the minimum length among all s
 ## Note on Accuracy
 
 The accuracy of the minimum length scale computed by Imageruler is limited by the finite resolution of the input image. A fundamental feature is that length scales smaller than a single pixel cannot be measured. Also, in certain situations, length scales of a few pixels may be indistinguishable from discretization artifacts such as the "staircasing" of curved surfaces. As an example, a sharp 90° corner corresponds to a length scale (radius of curvature) of *zero* at infinite resolution. However, at a finite resolution, a sharp corner is indistinguishable from one that is rounded with a radius of curvature of a few pixels. Imageruler will therefore return a length scale proportional to the pixel size rather than zero. In general, the measured length scale should be viewed as having an "error bar" on the few-pixel level.
-
-## References
-
-[1] [L. Hägg and E. Wadbro, On minimum length scale control in density based topology optimization, Structural and Multidisciplinary Optimization, Vol. 58, pp. 1015–1032 (2018).](https://doi.org/10.1007/s00158-018-1944-0)  
-[2] R. C. Gonzalez and R. E. Woods, Digital Image Processing (Fourth Edition), Chapter 9: Morphological Image Processing, (Pearson, 2017).  
-[3] OpenCV: Open Source Computer Vision Library, [https://github.com/opencv/opencv](https://github.com/opencv/opencv).
