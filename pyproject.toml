@@ -1,0 +1,71 @@
+[project]
+
+name = "imageruler"
+version = "v0.1.0"
+description = "Measure minimum sollid/void lengthscales in binary images."
+keywords = ["topology", "optimization", "length scale"]
+readme = "README.md"
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+
+authors = [
+    {name = "Wenchao Ma", email = "mawc@mit.edu"},
+    {name = "Ian A. D. Williamson"},
+    {name = "Martin Schubert"},
+    {name = "Ardavan Oskooi"},
+    {name = "Steven G. Johnson", email = "stevenj@mit.edu"},
+]
+maintainers = [
+    {name = "Wenchao Ma", email = "mawc@mit.edu"},
+    {name = "Ian A. D. Williamson"},
+    {name = "Martin Schubert"},
+    {name = "Ardavan Oskooi"},
+    {name = "Steven G. Johnson", email = "stevenj@mit.edu"},
+]
+
+dependencies = [
+    "numpy",
+    "opencv-python",
+]
+
+[project.optional-dependencies]
+tests = [
+    "parameterized",
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+]
+dev = [
+    "bump-my-version",
+    "darglint",
+    "imageruler[tests]",
+    "pre-commit",
+]
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+"imageruler" = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]  # Allow tests with same name in different dirs.
+pythonpath = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.isort]
+multi_line_output = 3
+line_length = 88
+include_trailing_comma = true
+
+[tool.pydocstyle]
+inherit = false
+convention = "google"
