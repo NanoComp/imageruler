@@ -39,6 +39,7 @@ tests = [
 docs = [
     "matplotlib",
     "jupyter-book",
+    "scipy",
     "sphinx-autodoc-typehints",
     "sphinx-click",
 ]

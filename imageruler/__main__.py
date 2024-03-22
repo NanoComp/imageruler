@@ -13,7 +13,7 @@ import imageruler
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "A python package for estimating minimum lengthscales in binary" " images"
+            "A python package for estimating minimum lengthscales in binary images"
         )
     )
     parser.add_argument(

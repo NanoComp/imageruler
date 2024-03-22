@@ -84,8 +84,10 @@ def minimum_length_scale(
     """
     if x.ndim != 2:
         raise ValueError(f"`x` must be 2-dimensional, but got shape {x.shape}.")
+    if not isinstance(x, onp.ndarray):
+        raise ValueError(f"`x` must be a numpy array but got {type(x)}.")
     if x.dtype != bool:
-        raise ValueError(f"`x` must be of type `bool` but got {type(x)}.")
+        raise ValueError(f"`x` must be of type `bool` but got {x.dtype}.")
     if not isinstance(periodic[0], bool) or not isinstance(periodic[1], bool):
         raise ValueError(
             f"`periodic` must be a length-2 tuple of `bool` but got {periodic}."
