@@ -590,7 +590,6 @@ def _search(
   """
 
   args = [min(arg_range), (min(arg_range) + max(arg_range)) / 2, max(arg_range)]
-
   if not function(args[0]) and function(args[2]):
     while abs(args[0] - args[2]) > arg_threshold:
       arg = args[1]
@@ -711,36 +710,39 @@ def get_kernel(
   """
 
   pixel_size = np.asarray(pixel_size)
-  shape = np.array(np.round(diameter / pixel_size), dtype=int)
+  kernel_size = np.array(np.round(diameter / pixel_size), dtype=int)
 
-  if shape[0] <= 2 and shape[1] <= 2:
-    return np.ones(shape, dtype=np.uint8)
+  if kernel_size[0] <= 2 and kernel_size[1] <= 2:
+    if kernel_size[0] == 0 or kernel_size[1] == 0:
+      return np.array([[1]], dtype=np.uint8)
+    else:
+      return np.ones(kernel_size, dtype=np.uint8)
 
   rounded_size = np.round(diameter / pixel_size - 1) * pixel_size
 
   if kernel_shape is KernelShape.CIRCLE:
-    x_tick = np.linspace(-rounded_size[0] / 2, rounded_size[0] / 2, shape[0])
-    y_tick = np.linspace(-rounded_size[1] / 2, rounded_size[1] / 2, shape[1])
+    x_tick = np.linspace(-rounded_size[0] / 2, rounded_size[0] / 2, kernel_size[0])
+    y_tick = np.linspace(-rounded_size[1] / 2, rounded_size[1] / 2, kernel_size[1])
     x, y = np.meshgrid(x_tick, y_tick, sparse=True, indexing='ij')
     return np.array(x**2 + y**2 <= diameter**2 / 4, dtype=np.uint8)
   elif kernel_shape is KernelShape.RECTANGLE:
-    return np.ones(shape, dtype=np.uint8)
+    return np.ones(kernel_size, dtype=np.uint8)
   else:
     raise ValueError(f'Unknown kernel shape: {kernel_shape.name}.')
 
 
 def _get_padding_for_kernel(kernel: Array) -> Tuple[Padding, Padding]:
   """Gets padding and unpadding width for a given kernel."""
-  shape = kernel.shape
-  pad_width = ((shape[0],) * 2, (shape[1],) * 2)
+  kernel_size = kernel.shape
+  pad_width = ((kernel_size[0],) * 2, (kernel_size[1],) * 2)
   unpad_width = (
       (
-          pad_width[0][0] + (shape[0] + 1) % 2,
-          pad_width[0][1] - (shape[0] + 1) % 2,
+          pad_width[0][0] + (kernel_size[0] + 1) % 2,
+          pad_width[0][1] - (kernel_size[0] + 1) % 2,
       ),
       (
-          pad_width[1][0] + (shape[1] + 1) % 2,
-          pad_width[1][1] - (shape[1] + 1) % 2,
+          pad_width[1][0] + (kernel_size[1] + 1) % 2,
+          pad_width[1][1] - (kernel_size[1] + 1) % 2,
       ),
   )
   return pad_width, unpad_width
