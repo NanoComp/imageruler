@@ -1,6 +1,6 @@
 """Imageruler for measuring minimum lengthscales in binary images."""
 
-__version__ = "v0.1.0"
+__version__ = "v0.2.0"
 __all__ = [
     "IgnoreScheme",
     "minimum_length_scale",
