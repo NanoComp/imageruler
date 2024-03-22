@@ -39,6 +39,7 @@ dev = [
     "bump-my-version",
     "darglint",
     "imageruler[tests]",
+    "mypy",
     "pre-commit",
 ]
 
