@@ -9,7 +9,7 @@ on:
       - cron: "0 13 * * 1"  # Every Monday at 9AM EST
 
 jobs:
-  experiment:
+  example:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
