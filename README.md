@@ -1,5 +1,5 @@
 [![Build Status](https://github.com/NanoComp/imageruler/workflows/CI/badge.svg)](https://github.com/NanoComp/imageruler/actions)
-`v0.1.0`
+`v0.2.0`
 
 Imageruler is a free Python program to compute the minimum length scale of binary images which are typically designs produced by topology optimization. The algorithm is described in Section 2 of [J. Optical Society of America B, Vol. 42, pp. A161-A176 (2024)](https://opg.optica.org/josab/abstract.cfm?uri=josab-41-2-A161) and is based on morphological transformations implemented using [OpenCV](https://github.com/opencv/opencv). Imageruler also supports 1d binary images.
 

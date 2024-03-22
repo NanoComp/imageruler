@@ -1,7 +1,7 @@
 [project]
 
 name = "imageruler"
-version = "v0.1.0"
+version = "v0.2.0"
 description = "Measure minimum sollid/void lengthscales in binary images."
 keywords = ["topology", "optimization", "length scale"]
 readme = "README.md"
