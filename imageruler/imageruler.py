@@ -590,6 +590,7 @@ def _search(
   """
 
   args = [min(arg_range), (min(arg_range) + max(arg_range)) / 2, max(arg_range)]
+
   if not function(args[0]) and function(args[2]):
     while abs(args[0] - args[2]) > arg_threshold:
       arg = args[1]
