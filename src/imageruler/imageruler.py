@@ -564,7 +564,7 @@ def maximum_true_arg(
     while min_arg <= max_arg:
         # We double `min_arg` rather than bisecting, as this requires fewer
         # evaluations when the minimum `True` value is close to `min_arg`.
-        test_arg_start = min(min_arg * 2, (min_arg + max_arg) // 2)
+        test_arg_start = min(min_arg * 2, max_arg)
         test_arg_stop = min(test_arg_start + non_monotonic_allowance, max_arg + 1)
         for test_arg in range(test_arg_start, test_arg_stop):
             result = nearly_monotonic_fn(test_arg)
