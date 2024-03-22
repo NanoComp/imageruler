@@ -1,11 +1,13 @@
 """Command line interface for imageruler.
 
-Invoke by running `python cli` from the imageruler directory.
+Invoke by running `python imageruler FILENAME` from the imageruler directory.
 """
 
 import argparse
+
+import numpy as onp
+
 import imageruler
-import numpy as np
 
 
 def main():
@@ -19,7 +21,9 @@ def main():
     )
     args = parser.parse_args()
 
-    solid_mls, void_mls = imageruler.minimum_length_solid_void(np.loadtxt(args.file))
+    design = onp.loadtxt(args.file, delimiter=",")
+    design = design > 0.5
+    solid_mls, void_mls = imageruler.minimum_length_scale(design)
     print("Minimum lengthscales of solid and void regions: ", solid_mls, void_mls)
 
 

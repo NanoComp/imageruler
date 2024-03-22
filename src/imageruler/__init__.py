@@ -1,6 +1,16 @@
-"""Imageruler."""
+"""Imageruler for measuring minimum lengthscales in binary images."""
 
 __version__ = "v0.1.0"
+__all__ = [
+    "IgnoreScheme",
+    "minimum_length_scale",
+    "minimum_length_scale_solid",
+    "length_scale_violations_solid",
+]
 
-from imageruler import imageruler as imageruler
-from imageruler import regular_shapes as regular_shapes
+from imageruler.imageruler import (
+    IgnoreScheme,
+    length_scale_violations_solid,
+    minimum_length_scale,
+    minimum_length_scale_solid,
+)
