@@ -1,733 +1,380 @@
 """Imageruler for measuring minimum lengthscales in binary images."""
 
+import dataclasses
 import enum
-from typing import Callable, Optional, Tuple, Union
-import warnings
-import cv2 as cv
-import numpy as np
+import functools
+from typing import Any, Callable, Tuple
 
-warnings.simplefilter("always")
+import cv2
+import numpy as onp
 
-# Threshold used for binarization.
-_BINARIZATION_THRESHOLD = 0.5
+NDArray = onp.ndarray[Any, Any]
 
-_PLUS_KERNEL = np.array(
+
+FEASIBILITY_GAP_ALLOWANCE = 5
+
+PLUS_3_KERNEL = onp.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)
+PLUS_5_KERNEL = onp.array(
     [
-        [0, 1, 0],
-        [1, 1, 1],
-        [0, 1, 0],
+        [0, 1, 1, 1, 0],
+        [1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1],
+        [0, 1, 1, 1, 0],
     ],
-    dtype=np.uint8,
+    dtype=bool,
 )
-
-Array = np.ndarray
-PhysicalSize = Tuple[float, ...]
-PixelSize = Tuple[float, ...]
-MarginSize = Tuple[Tuple[float, float], ...]
-PeriodicAxes = Tuple[int, ...]
-Padding = Tuple[Tuple[int, int], Tuple[int, int]]
+SQUARE_3_KERNEL = onp.ones((3, 3), dtype=bool)
 
 
 @enum.unique
-class Direction(enum.Enum):
-    IN = "in"
-    OUT = "out"
-    BOTH = "both"
+class IgnoreScheme(enum.Enum):
+    """Enumerates schemes for ignoring length scale violations."""
+
+    NONE = "none"
+    EDGES = "edges"
+    LARGE_FEATURE_EDGES = "large_feature_edges"
 
 
 @enum.unique
 class PaddingMode(enum.Enum):
+    """Enumerates padding modes for arrays."""
+
     EDGE = "edge"
     SOLID = "solid"
     VOID = "void"
 
 
-@enum.unique
-class KernelShape(enum.Enum):
-    CIRCLE = "circle"
-    RECTANGLE = "rectangle"
+# ------------------------------------------------------------------------------
+# Exported functions related to the length scale metric.
+# ------------------------------------------------------------------------------
 
 
-def minimum_length_solid(
-    array: Array,
-    phys_size: Optional[PhysicalSize] = None,
-    periodic_axes: Optional[PeriodicAxes] = None,
-    margin_size: Optional[MarginSize] = None,
-    pad_mode: PaddingMode = PaddingMode.SOLID,
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-    warn_cusp: bool = False,
-) -> float:
-    """Computes the minimum length scale of the solid regions of an image.
+def minimum_length_scale(
+    x: NDArray,
+    periodic: Tuple[bool, bool] = (False, False),
+    ignore_scheme: IgnoreScheme = IgnoreScheme.LARGE_FEATURE_EDGES,
+    feasibility_gap_allowance: int = FEASIBILITY_GAP_ALLOWANCE,
+) -> Tuple[int, int]:
+    """Identifies the minimum length scale of solid and void features in `x`.
 
-    Args:
-        array: The 1D or 2D binarized image array.
-        phys_size: The extent of the image in physical units. If not specified,
-            pixel units are used for the returned length scale.
-        periodic_axes: The axes which are periodic. x is 0 and y is 1. If not
-            specified, no axes are treated as periodic.
-        margin_size: The physical dimensions of the image margins. If specified,
-            this subregion is excluded from the length scale measurement. Default is
-            no margins.
-        pad_mode: The padding mode to use at the image boundaries. Defaults to
-            solid.
-        kernel_shape: The kernel shape to use for probing the length scale. Defaults
-            to a circular kernel.
-        warn_cusp: Whether to warn about the presence of sharp corners or cusps
-            detected in the image. Default is False (no warning).
+    The minimum length scale for solid (void) features defines the largest brush
+    which can be used to recreate the solid (void) features in `x`, by convolving
+    an array of "touches" with the brush kernel. In general if an array can be
+    created with a given brush, then its solid and void features are unchanged by
+    binary opening operations with that brush.
 
-    Returns:
-        The minimum length scale of the solid regions in the input image. The units
-        are the same as those of `phys_size`. If `phys_size` is not specified, pixel
-        units are used.
-    """
-
-    array, pixel_size, short_pixel_side, short_entire_side = _initialize_ruler(
-        array, phys_size, periodic_axes, warn_cusp
-    )
-
-    # If all of the elements in the array are the same,
-    # the shorter length of the image is considered to
-    # be its minimum length scale.
-    if len(np.unique(array)) == 1:
-        return short_entire_side
-
-    if array.ndim == 1:
-        if margin_size is not None:
-            array = _trim_margins(array, margin_size, pixel_size)
-        solid_min_length, _ = _minimum_length_1d(array)
-        return solid_min_length * short_pixel_side
-
-    def _interior_pixel_number(diameter: float, array: Array) -> bool:
-        """Determines whether an image violates a given length scale."""
-        return _length_violation_solid(
-            array=array,
-            diameter=diameter,
-            pixel_size=pixel_size,
-            margin_size=margin_size,
-            pad_mode=pad_mode,
-            kernel_shape=kernel_shape,
-        ).any()
-
-    min_len, _ = _search(
-        (short_pixel_side, short_entire_side),
-        min(pixel_size) / 2,
-        lambda d: _interior_pixel_number(d, array),
-    )
-
-    return min_len
-
-
-def minimum_length_void(
-    array: Array,
-    phys_size: Optional[PhysicalSize] = None,
-    periodic_axes: Optional[PeriodicAxes] = None,
-    margin_size: Optional[MarginSize] = None,
-    pad_mode: PaddingMode = PaddingMode.VOID,
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-    warn_cusp: bool = False,
-) -> float:
-    """Computes the minimum length scale of the void regions of an image.
+    In some cases, an array that can be creatied with a brush of size `n` cannot
+    be created with the samller brush if size `n - 1`. Further, small pixel-scale
+    violations at edges of features may be unimportant. Some allowance for these
+    is provided via optional arguments to this function.
 
     Args:
-        array: The 1D or 2D binarized image array.
-        phys_size: The extent of the image in physical units. If not specified,
-            pixel units are used for the returned length scale.
-        periodic_axes: The axes which are periodic. x is 0 and y is 1. If not
-            specified, no axes are treated as periodic.
-        margin_size: The physical dimensions of the image margins. If specified,
-            this subregion is excluded from the length scale measurement. Default is
-            no margins.
-        pad_mode: The padding mode to use at the image boundaries. Defaults to void.
-        kernel_shape: The kernel shape to use for probing the length scale. Defaults
-            to a circular kernel.
-        warn_cusp: Whether to warn about the presence of sharp corners or cusps
-            detected in the image. Default is False (no warning).
+        x: Bool-typed rank-2 array containing the features.
+        periodic: Specifies which of the two axes are to be regarded as periodic.
+        ignore_scheme: Specifies what pixels are ignored when detecting violations.
+        feasibility_gap_allowance: In checking whether a `x` is feasible with a brush
+            of size `n`, we also check for feasibility with larger brushes, since
+            e.g. some features realizable with a brush `n + k` may not be realizable
+            with the brush of size `n`. The `feasibility_gap_allowance is the
+            maximum value of `k` checked.
 
     Returns:
-        The minimum length scale of the void regions in the input image. The units
-        are the same as those of `phys_size`. If `phys_size` is not specified, pixel
-        units are used.
+        The detected minimum length scales `(length_scale_solid, length_scale_void)`.
     """
-    array, _, _, _ = _initialize_ruler(array, phys_size)
-    if pad_mode is PaddingMode.SOLID:
-        pad_mode = PaddingMode.VOID
-    elif pad_mode is PaddingMode.VOID:
-        pad_mode = PaddingMode.SOLID
+    if x.ndim != 2:
+        raise ValueError(f"`x` must be 2-dimensional, but got shape {x.shape}.")
+    if x.dtype != bool:
+        raise ValueError(f"`x` must be of type `bool` but got {type(x)}.")
+    if not isinstance(periodic[0], bool) or not isinstance(periodic[1], bool):
+        raise ValueError(
+            f"`periodic` must be a length-2 tuple of `bool` but got {periodic}."
+        )
+
+    # Use a dedicated codepath for arrays with a singleton axis.
+    if 1 in x.shape:
+        idx, squeeze_idx = (1, 0) if x.shape[0] == 1 else (0, 1)
+        return minimum_length_scale_1d(
+            onp.squeeze(x, axis=squeeze_idx), periodic=periodic[idx]
+        )
+
+    return (
+        minimum_length_scale_solid(
+            x, periodic, ignore_scheme, feasibility_gap_allowance
+        ),
+        minimum_length_scale_solid(
+            ~x, periodic, ignore_scheme, feasibility_gap_allowance
+        ),
+    )
+
+
+def minimum_length_scale_solid(
+    x: NDArray,
+    periodic: Tuple[bool, bool] = (False, False),
+    ignore_scheme: IgnoreScheme = IgnoreScheme.LARGE_FEATURE_EDGES,
+    feasibility_gap_allowance: int = FEASIBILITY_GAP_ALLOWANCE,
+) -> int:
+    """Identifies the minimum length scale of solid features in `x`.
+
+    Args:
+        x: Bool-typed rank-2 array containing the features.
+        periodic: Specifies which of the two axes are to be regarded as periodic.
+        ignore_scheme: Specifies what pixels are ignored when detecting violations.
+        feasibility_gap_allowance: In checking whether a `x` is feasible with a brush
+            of size `n`, we also check for feasibility with larger brushes, since
+            e.g. some features realizable with a brush `n + k` may not be realizable
+            with the brush of size `n`. The `feasibility_gap_allowance is the
+            maximum value of `k` used.
+
+    Returns:
+        The detected minimum length scale of solid features.
+    """
+    assert x.dtype == bool
+
+    def test_fn(length_scale: int) -> bool:
+        return ~onp.any(  # type: ignore
+            length_scale_violations_solid(
+                x=x,
+                length_scale=length_scale,
+                periodic=periodic,
+                ignore_scheme=ignore_scheme,
+                feasibility_gap_allowance=feasibility_gap_allowance,
+            )
+        )
+
+    return maximum_true_arg(
+        nearly_monotonic_fn=test_fn,
+        min_arg=1,
+        max_arg=max(x.shape),
+        non_monotonic_allowance=feasibility_gap_allowance,
+    )
+
+
+def length_scale_violations_solid(
+    x: NDArray,
+    length_scale: int,
+    periodic: Tuple[bool, bool] = (False, False),
+    ignore_scheme: IgnoreScheme = IgnoreScheme.LARGE_FEATURE_EDGES,
+    feasibility_gap_allowance: int = FEASIBILITY_GAP_ALLOWANCE,
+) -> NDArray:
+    """Computes the length scale violations, allowing for the feasibility gap.
+
+    Args:
+        x: Bool-typed rank-2 array containing the features.
+        length_scale: The length scale for which violations are sought.
+        periodic: Specifies which of the two axes are to be regarded as periodic.s
+        ignore_scheme: Specifies what pixels are ignored when detecting violations.
+        feasibility_gap_allowance: In checking whether a `x` is feasible with a brush
+            of size `n`, we also check for feasibility with larger brushes, since
+            e.g. some features realizable with a brush `n + k` may not be realizable
+            with the brush of size `n`. The `feasibility_gap_allowance is the
+            maximum value of `k` used.
+
+    Returns:
+        The array containing violations.
+    """
+    violations = []
+    for scale in range(length_scale, length_scale + feasibility_gap_allowance):
+        violations.append(
+            length_scale_violations_solid_strict(x, scale, periodic, ignore_scheme)
+        )
+    length_scale_violations: NDArray = onp.all(violations, axis=0)
+    return length_scale_violations
+
+
+# ------------------------------------------------------------------------------
+# Non-exported functions related to the length scale metric.
+# ------------------------------------------------------------------------------
+
+
+def length_scale_violations_solid_strict(
+    x: NDArray,
+    length_scale: int,
+    periodic: Tuple[bool, bool],
+    ignore_scheme: IgnoreScheme,
+) -> NDArray:
+    """Identifies length scale violations of solid features in `x`.
+
+    Args:
+        x: Bool-typed rank-2 array containing the features.
+        length_scale: The length scale for which violations are sought.
+        periodic: Specifies which of the two axes are to be regarded as periodic.s
+        ignore_scheme: Specifies what pixels are ignored when detecting violations.
+
+    Returns:
+        The array containing violations.
+    """
+    violations = _length_scale_violations_solid_strict(
+        wrapped_x=_HashableArray(x),
+        length_scale=length_scale,
+        periodic=periodic,
+        ignore_scheme=ignore_scheme,
+    )
+    assert violations.shape == x.shape
+    return violations
+
+
+@dataclasses.dataclass
+class _HashableArray:
+    """Hashable wrapper for numpy arrays."""
+
+    array: NDArray
+
+    def __hash__(self) -> int:
+        return hash((self.array.dtype, self.array.shape, self.array.tobytes()))
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, _HashableArray):
+            return False
+        return onp.all(self.array == other.array) and (  # type: ignore
+            self.array.dtype == other.array.dtype
+        )
+
+
+@functools.lru_cache(maxsize=128)
+def _length_scale_violations_solid_strict(
+    wrapped_x: _HashableArray,
+    length_scale: int,
+    periodic: Tuple[bool, bool],
+    ignore_scheme: IgnoreScheme,
+) -> NDArray:
+    """Identifies length scale violations of solid features in `x`.
+
+    This function is strict, in the sense that no violations are ignored.
+
+    Args:
+        wrapped_x: The wrapped bool-typed rank-2 array containing the features.
+        length_scale: The length scale for which violations are sought.
+        periodic: Specifies which of the two axes are to be regarded as periodic.
+        ignore_scheme: Specifies what pixels are ignored when detecting violations.
+
+    Returns:
+        The array containing violations.
+    """
+    x = wrapped_x.array
+    kernel = kernel_for_length_scale(length_scale)
+    violations_solid = x & ~binary_opening(x, kernel, periodic, PaddingMode.SOLID)
+
+    ignored = ignored_pixels(x, periodic, ignore_scheme)
+    violations_solid = violations_solid & ~ignored
+    return violations_solid
+
+
+def kernel_for_length_scale(length_scale: int) -> NDArray:
+    """Returns an approximately circular kernel for the given `length_scale`.
+
+    The kernel has shape `(length_scale, length_scale)`, and is `True` for pixels
+    whose centers lie within the circle of radius `length_scale / 2` centered on
+    the kernel. This yields a pixelated circle, which for length scales less than
+    `3` will actually be square.
+
+    Args:
+        length_scale: The length scale for which the kernel is sought.
+
+    Returns:
+        The approximately circular kernel.
+    """
+    assert length_scale > 0
+    centers = onp.arange(-length_scale / 2 + 0.5, length_scale / 2)
+    squared_distance = centers[:, onp.newaxis] ** 2 + centers[onp.newaxis, :] ** 2
+    kernel = squared_distance < (length_scale / 2) ** 2
+    # Ensure that kernels larger than `2` can be realized with a width-3 brush.
+    if length_scale > 2:
+        kernel = binary_opening(
+            kernel,
+            kernel=PLUS_3_KERNEL,
+            periodic=(False, False),
+            padding_mode=PaddingMode.VOID,
+        )
+    return kernel
+
+
+def ignored_pixels(
+    x: NDArray,
+    periodic: Tuple[bool, bool],
+    ignore_scheme: IgnoreScheme,
+) -> NDArray:
+    """Returns an array indicating locations at which violations are to be ignored.
+
+    Args:
+        x: The array for which ignored locations are to be identified.
+        periodic: Specifies which of the two axes are to be regarded as periodic.
+        ignore_scheme: Specifies the manner in which ignored locations are identified.
+
+    Returns:
+        The array indicating locations to be ignored.
+    """
+    assert x.dtype == bool
+    if ignore_scheme == IgnoreScheme.NONE:
+        return onp.zeros_like(x)
+    elif ignore_scheme == IgnoreScheme.EDGES:
+        return x & ~binary_erosion(x, PLUS_3_KERNEL, periodic, PaddingMode.SOLID)
+    elif ignore_scheme == IgnoreScheme.LARGE_FEATURE_EDGES:
+        return x & ~erode_large_features(x, periodic)
     else:
-        pad_mode = PaddingMode.EDGE
+        raise ValueError(f"Unknown `ignore_scheme`, got {ignore_scheme}.")
 
-    return minimum_length_solid(
-        array=~array,
-        phys_size=phys_size,
-        periodic_axes=periodic_axes,
-        margin_size=margin_size,
-        pad_mode=pad_mode,
-        kernel_shape=kernel_shape,
-        warn_cusp=warn_cusp,
+
+# ------------------------------------------------------------------------------
+# Array-manipulating functions backed by `cv2`.
+# ------------------------------------------------------------------------------
+
+
+def binary_opening(
+    x: NDArray, kernel: NDArray, periodic: Tuple[bool, bool], padding_mode: PaddingMode
+) -> NDArray:
+    """Performs binary opening with the given `kernel` and padding mode."""
+    assert x.ndim == 2
+    assert x.dtype == bool
+    assert kernel.ndim == 2
+    assert kernel.dtype == bool
+    # The `cv2` convention for binary opening yields a shifted output with
+    # even-shape kernels, requiring padding and unpadding to differ.
+    pad_width, unpad_width = _pad_width_for_kernel_shape(kernel.shape)
+    opened = cv2.morphologyEx(
+        src=pad_2d(x, pad_width, periodic, padding_mode).view(onp.uint8),
+        kernel=kernel.view(onp.uint8),
+        op=cv2.MORPH_OPEN,
     )
+    return unpad(opened.view(bool), unpad_width)
 
 
-def minimum_length_solid_void(
-    array: Array,
-    phys_size: Optional[PhysicalSize] = None,
-    periodic_axes: Optional[PeriodicAxes] = None,
-    margin_size: Optional[MarginSize] = None,
-    pad_mode: Tuple[PaddingMode, PaddingMode] = (
-        PaddingMode.SOLID,
-        PaddingMode.VOID,
-    ),
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-    warn_cusp: bool = False,
-) -> Tuple[float, float]:
-    """Computes the minimum length scale for both phases of an image.
-
-    Args:
-        array: The 1D or 2D binarized image array.
-        phys_size: The extent of the image in physical units. If not specified,
-            pixel units are used for the returned length scale.
-        periodic_axes: The axes which are periodic. x is 0 and y is 1. If not
-            specified, no axes are treated as periodic.
-        margin_size: The physical dimensions of the image margins. If specified,
-            this subregion is excluded from the length scale measurement. Default is
-            no margins.
-        pad_mode: The padding mode to use at the image boundaries for each phase.
-            Defaults to solid for the solid phase and void for the void phase.
-        kernel_shape: The kernel shape to use for probing the length scale. Defaults
-            to a circular kernel.
-        warn_cusp: Whether to warn about the presence of sharp corners or cusps
-            detected in the image. Default is False (no warning).
-
-    Returns:
-        The minimum length scale of the solid and void phases in the input image.
-        The units are the same as those of `phys_size`. If `phys_size` is not
-        specified, pixel units are used.
-    """
-    return minimum_length_solid(
-        array=array,
-        phys_size=phys_size,
-        periodic_axes=periodic_axes,
-        margin_size=margin_size,
-        pad_mode=pad_mode[0],
-        kernel_shape=kernel_shape,
-        warn_cusp=warn_cusp,
-    ), minimum_length_void(
-        array=array,
-        phys_size=phys_size,
-        periodic_axes=periodic_axes,
-        margin_size=margin_size,
-        pad_mode=pad_mode[1],
-        kernel_shape=kernel_shape,
-        warn_cusp=warn_cusp,
+def binary_erosion(
+    x: NDArray, kernel: NDArray, periodic: Tuple[bool, bool], padding_mode: PaddingMode
+) -> NDArray:
+    """Performs binary erosion with structuring element `kernel`."""
+    assert x.dtype == bool
+    assert kernel.dtype == bool
+    pad_width = ((kernel.shape[0],) * 2, (kernel.shape[1],) * 2)
+    eroded = cv2.erode(
+        src=pad_2d(x, pad_width, periodic, padding_mode).view(onp.uint8),
+        kernel=kernel.view(onp.uint8),
     )
+    return unpad(eroded.view(bool), pad_width)
 
 
-def minimum_length(
-    array: Array,
-    phys_size: Optional[PhysicalSize] = None,
-    periodic_axes: Optional[PeriodicAxes] = None,
-    margin_size: Optional[MarginSize] = None,
-    pad_mode: Union[PaddingMode, Tuple[PaddingMode, PaddingMode]] = (
-        PaddingMode.SOLID,
-        PaddingMode.VOID,
-    ),
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-    warn_cusp: bool = False,
-) -> float:
-    """Computes the minimum length scale of an image.
-
-    Th returned value is the smaller of the minimum length scale of the solid and
-    void regions. For a 2D image, this is computed using the difference between
-    morphological opening and closing. For a 1d image, this is computed using
-    a brute-force search.
-
-    Args:
-        array: The 1D or 2D binarized image array.
-        phys_size: The extent of the image in physical units. If not specified,
-            pixel units are used for the returned length scale.
-        periodic_axes: The axes which are periodic. x is 0 and y is 1. If not
-            specified, no axes are treated as periodic.
-        margin_size: The physical dimensions of the image margins. If specified,
-            this subregion is excluded from the length scale measurement. Default is
-            no margins.
-        pad_mode: The padding mode to use at the image boundaries for each phase.
-            Defaults to solid for the solid phase and void for the void phase.
-        kernel_shape: The kernel shape to use for probing the length scale. Defaults
-            to a circular kernel.
-        warn_cusp: Whether to warn about the presence of sharp corners or cusps
-            detected in the image. Default is False (no warning).
-
-    Returns:
-        The minimum length scale of the solid and void phases in the input image.
-        The units are the same as those of `phys_size`. If `phys_size` is not
-        specified, pixel units are used.
-    """
-    array, pixel_size, short_pixel_side, short_entire_side = _initialize_ruler(
-        array, phys_size, periodic_axes, warn_cusp
+def binary_dilation(
+    x: NDArray, kernel: NDArray, periodic: Tuple[bool, bool], padding_mode: PaddingMode
+) -> NDArray:
+    """Performs binary dilation with structuring element `kernel`."""
+    assert x.dtype == bool
+    assert kernel.dtype == bool
+    # The `cv2` convention for binary dilation yields a shifted output with
+    # even-shape kernels, requiring padding and unpadding to differ.
+    pad_width, unpad_width = _pad_width_for_kernel_shape(kernel.shape)
+    dilated = cv2.dilate(
+        src=pad_2d(x, pad_width, periodic, padding_mode).view(onp.uint8),
+        kernel=kernel.view(onp.uint8),
     )
+    return unpad(dilated.view(bool), unpad_width)
 
-    # If all of the elements in the array are the same,
-    # the shorter length of the image is considered to
-    # be its minimum length scale.
-    if len(np.unique(array)) == 1:
-        return short_entire_side
 
-    if array.ndim == 1:
-        if margin_size is not None:
-            array = _trim_margins(array, margin_size, pixel_size)
-        solid_min_length, void_min_length = _minimum_length_1d(array)
-        return min(solid_min_length, void_min_length) * short_pixel_side
+_Padding = Tuple[Tuple[int, int], Tuple[int, int]]
 
-    if isinstance(pad_mode, PaddingMode):
-        pad_mode = (pad_mode, pad_mode)
 
-    def _interior_pixel_number(diameter: float, arr: Array) -> bool:
-        """Determines whether an image violates a given length scale."""
-        return _length_violation(
-            array=arr,
-            diameter=diameter,
-            pixel_size=pixel_size,
-            margin_size=margin_size,
-            pad_mode=pad_mode,
-            kernel_shape=kernel_shape,
-        ).any()
-
-    min_len, _ = _search(
-        (short_pixel_side, short_entire_side),
-        min(pixel_size) / 2,
-        lambda d: _interior_pixel_number(d, array),
-    )
-
-    return min_len
-
-
-def _length_violation_solid(
-    array: Array,
-    diameter: float,
-    pixel_size: PixelSize,
-    margin_size: Optional[Tuple[Tuple[float, float], ...]] = None,
-    pad_mode: PaddingMode = PaddingMode.SOLID,
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-) -> Array:
-    """Identifies the solid subregions which contain length scale violations."""
-    kernel = get_kernel(diameter, pixel_size, kernel_shape)
-    open_diff = binary_open(array, kernel, pad_mode) ^ array
-    interior_diff = open_diff & _get_interior(array, Direction.IN, pad_mode)
-    if margin_size is not None:
-        interior_diff = _trim_margins(interior_diff, margin_size, pixel_size)
-
-    return interior_diff
-
-
-def _length_violation(
-    array: Array,
-    diameter: float,
-    pixel_size: PixelSize,
-    margin_size: Optional[MarginSize] = None,
-    pad_mode: Tuple[PaddingMode, PaddingMode] = (
-        PaddingMode.SOLID,
-        PaddingMode.VOID,
-    ),
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-) -> Array:
-    """Identifies the subregions which contain length scale violations."""
-    kernel = get_kernel(diameter, pixel_size, kernel_shape)
-    close_open_diff = binary_open(array, kernel, pad_mode[0]) ^ binary_close(
-        array, kernel, pad_mode[1]
-    )
-    interior_diff = close_open_diff & _get_interior(array, Direction.BOTH, pad_mode)
-    if margin_size is not None:
-        interior_diff = _trim_margins(interior_diff, margin_size, pixel_size)
-    return interior_diff
-
-
-def length_violation_solid(
-    array: Array,
-    diameter: float,
-    phys_size: Optional[PhysicalSize] = None,
-    periodic_axes: Optional[PeriodicAxes] = None,
-    margin_size: Optional[MarginSize] = None,
-    pad_mode: PaddingMode = PaddingMode.SOLID,
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-) -> Array:
-    """Identifies the solid subregions which contain length scale violations.
-
-    Args:
-        array: The 2D binarized image array.
-        diameter: The diameter of the kernel for detecting length scale violations.
-        phys_size: The extent of the image in physical units. If not specified,
-            pixel units are used for the returned length scale.
-        periodic_axes: The axes which are periodic. x is 0 and y is 1. If not
-            specified, no axes are treated as periodic.
-        margin_size: The physical dimensions of the image margins. If specified,
-            this subregion is excluded from the length scale measurement. Default is
-            no margins.
-        pad_mode: The padding mode to use at the image boundaries. Defaults to void.
-        kernel_shape: The kernel shape to use for probing the length scale. Defaults
-            to a circular kernel.
-
-    Returns:
-        An array indicating the solid length scale violations in the input image.
-    """
-
-    array, pixel_size, _, _ = _initialize_ruler(array, phys_size, periodic_axes)
-    assert array.ndim == 2
-    return _length_violation_solid(
-        array=array,
-        diameter=diameter,
-        pixel_size=pixel_size,
-        margin_size=margin_size,
-        pad_mode=pad_mode,
-        kernel_shape=kernel_shape,
-    )
-
-
-def length_violation_void(
-    array: Array,
-    diameter: float,
-    phys_size: Optional[PhysicalSize] = None,
-    periodic_axes: Optional[PeriodicAxes] = None,
-    margin_size: Optional[MarginSize] = None,
-    pad_mode: str = "void",
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-) -> Array:
-    """Identifies the void subregions which contain length scale violations.
-
-    Args:
-        array: The 2D binarized image array.
-        diameter: The diameter of the kernel for detecting length scale violations.
-        phys_size: The extent of the image in physical units. If not specified,
-            pixel units are used for the returned length scale.
-        periodic_axes: The axes which are periodic. x is 0 and y is 1. If not
-            specified, no axes are treated as periodic.
-        margin_size: The physical dimensions of the image margins. If specified,
-            this subregion is excluded from the length scale measurement. Default is
-            no margins.
-        pad_mode: The padding mode to use at the image boundaries. Defaults to void.
-        kernel_shape: The kernel shape to use for probing the length scale. Defaults
-            to a circular kernel.
-
-    Returns:
-        An array indicating the void length scale violations in the input image.
-    """
-
-    array, pixel_size, _, _ = _initialize_ruler(array, phys_size, periodic_axes)
-    assert array.ndim == 2
-
-    if pad_mode is PaddingMode.SOLID:
-        pad_mode = PaddingMode.VOID
-    elif pad_mode is PaddingMode.VOID:
-        pad_mode = PaddingMode.SOLID
-    else:
-        pad_mode = PaddingMode.EDGE
-
-    return _length_violation_solid(
-        array=~array,
-        diameter=diameter,
-        pixel_size=pixel_size,
-        margin_size=margin_size,
-        pad_mode=pad_mode,
-        kernel_shape=kernel_shape,
-    )
-
-
-def length_violation(
-    array: Array,
-    diameter: float,
-    phys_size: Optional[PhysicalSize] = None,
-    periodic_axes: Optional[PeriodicAxes] = None,
-    margin_size: Optional[MarginSize] = None,
-    pad_mode: Tuple[PaddingMode, PaddingMode] = (
-        PaddingMode.SOLID,
-        PaddingMode.VOID,
-    ),
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-) -> Array:
-    """Identifies the subregions which contain length scale violations.
-
-    Args:
-        array: The 2D binarized image array.
-        diameter: The diameter of the kernel for detecting length scale violations.
-        phys_size: The extent of the image in physical units. If not specified,
-            pixel units are used for the returned length scale.
-        periodic_axes: The axes which are periodic. x is 0 and y is 1. If not
-            specified, no axes are treated as periodic.
-        margin_size: The physical dimensions of the image margins. If specified,
-            this subregion is excluded from the length scale measurement. Default is
-            no margins.
-        pad_mode: The padding mode to use at the image boundaries for each phase.
-            Defaults to solid for the solid phase and void for the void phase.
-        kernel_shape: The kernel shape to use for probing the length scale. Defaults
-            to a circular kernel.
-
-    Returns:
-        An array indicating the length scale violations in the input image.
-    """
-
-    array, pixel_size, _, _ = _initialize_ruler(array, phys_size, periodic_axes)
-    assert array.ndim == 2
-    if isinstance(pad_mode, PaddingMode):
-        pad_mode = (pad_mode, pad_mode)
-
-    return _length_violation(
-        array=array,
-        diameter=diameter,
-        pixel_size=pixel_size,
-        margin_size=margin_size,
-        pad_mode=pad_mode,
-        kernel_shape=kernel_shape,
-    )
-
-
-def _initialize_ruler(
-    array: Array,
-    phys_size: PhysicalSize,
-    periodic_axes: Optional[PeriodicAxes] = None,
-    warn_cusp: bool = False,
-) -> Tuple[Array, PixelSize, float, float]:
-    """Initializes the ruler.
-
-    This function converts the input array to a boolean array without redundant
-    dimensions and computes some basic information about the image.
-
-    Args:
-        array: The 2D binarized image array.
-        phys_size: The extent of the image in physical units. If not specified,
-            pixel units are used for the returned length scale.
-        periodic_axes: The axes which are periodic. x is 0 and y is 1. If not
-            specified, no axes are treated as periodic.
-        warn_cusp: Whether to warn about the presence of sharp corners or cusps
-            detected in the image. Default is False (no warning).
-
-    Returns:
-        A tuple with four elements. The first is a Boolean array obtained by
-        squeezing and binarizing the input array, the second is an array that
-        contains the pixel size, the third is the length of the shorter side of
-        the pixel, and the fourth is the length of the shorter side of the image.
-
-    Raises:
-        ValueError: If the physical size `phys_size` does not have the
-            expected format or the length of `phys_size` does not match the dimension
-            of the input array.
-    """
-
-    array = np.squeeze(array)
-
-    if (
-        isinstance(phys_size, Array)
-        or isinstance(phys_size, list)
-        or isinstance(phys_size, tuple)
-    ):
-        phys_size = np.squeeze(phys_size)
-        phys_size = phys_size[phys_size.nonzero()]  # keep nonzero elements only
-    elif isinstance(phys_size, float) or isinstance(phys_size, int):
-        phys_size = [phys_size]
-    elif phys_size is None:
-        phys_size = array.shape
-    else:
-        raise ValueError("Invalid format of the physical size.")
-
-    assert array.ndim == len(
-        phys_size
-    ), "The physical size and the dimension of the input array do not match."
-    assert array.ndim in (
-        1,
-        2,
-    ), "The current version of imageruler only supports 1d and 2d."
-
-    short_entire_side = min(phys_size)  # shorter side of the entire design region
-    pixel_size = _get_pixel_size(array, phys_size)
-    short_pixel_side = min(pixel_size)  # shorter side of a pixel
-    array = _binarize(array)  # Boolean array
-
-    if periodic_axes is not None:
-        if array.ndim == 2:
-            periodic_axes = np.array(periodic_axes)
-            reps = (2 if 0 in periodic_axes else 1, 2 if 1 in periodic_axes else 1)
-            array = np.tile(array, reps)
-            phys_size = np.array(phys_size) * reps
-            short_entire_side = min(
-                phys_size
-            )  # shorter side of the entire design region
-        else:  # arr.ndim == 1
-            array = np.tile(array, 2)
-            short_entire_side *= 2
-
-    if warn_cusp and array.ndim == 2:
-        harris = cv.cornerHarris(array.astype(np.uint8), blockSize=5, ksize=5, k=0.04)
-        if np.max(harris) > 5e-10:
-            warnings.warn("This image may contain sharp corners or cusps.")
-
-    return array, pixel_size, short_pixel_side, short_entire_side
-
-
-def _search(
-    arg_range: Tuple[float, float],
-    arg_threshold: float,
-    function: Callable[[float], bool],
-) -> Tuple[float, bool]:
-    """Performs a binary search.
-
-    Args:
-        arg_range: Initial range of the argument under search.
-        arg_threshold: Threshold of the argument range, below which the search
-            stops.
-        function: A function that returns True if the viariable is large enough but
-            False if the variable is not large enough.
-
-    Returns:
-        A tuple with two elements. The first is a float that represents the search
-        result. The second is a Boolean value, which is True if the search indeed
-        happens, False if the condition for starting search is not satisfied in
-        the beginning.
-
-    Raises:
-        RuntimeError: If `function` returns True at a smaller input viariable
-            but False at a larger input viariable.
-    """
-
-    args = [min(arg_range), (min(arg_range) + max(arg_range)) / 2, max(arg_range)]
-
-    if not function(args[0]) and function(args[2]):
-        while abs(args[0] - args[2]) > arg_threshold:
-            arg = args[1]
-            if not function(arg):
-                args[0], args[1] = (
-                    arg,
-                    (arg + args[2]) / 2,
-                )  # The current value is too small
-            else:
-                args[1], args[2] = (
-                    arg + args[0]
-                ) / 2, arg  # The current value is still large
-        return args[1], True
-    elif not function(args[0]) and not function(args[2]):
-        return args[2], False
-    elif function(args[0]) and function(args[2]):
-        return args[0], False
-    else:
-        raise RuntimeError("The function is not monotonically increasing.")
-
-
-def _minimum_length_1d(array: Array) -> Tuple[int, int]:
-    """Searches the minimum lengths of solid and void segments in a 1d array.
-
-    Args:
-        array: A 1D boolean array.
-
-    Returns:
-        A tuple of two integers. The first and second intergers represent the
-        numbers of pixels in the shortest solid and void segments, respectively.
-    """
-
-    array = np.append(array, ~array[-1])
-    solid_lengths, void_lengths = [], []
-    counter = 0
-
-    for idx in range(len(array) - 1):
-        counter += 1
-
-        if array[idx] != array[idx + 1]:
-            if array[idx]:
-                solid_lengths.append(counter)
-            else:
-                void_lengths.append(counter)
-            counter = 0
-
-    if len(solid_lengths) > 0:
-        solid_min_length = min(solid_lengths)
-    else:
-        solid_min_length = 0
-
-    if len(void_lengths) > 0:
-        void_min_length = min(void_lengths)
-    else:
-        void_min_length = 0
-
-    return solid_min_length, void_min_length
-
-
-def _get_interior(
-    array: Array,
-    direction: Direction,
-    pad_mode: Union[PaddingMode, Tuple[PaddingMode, PaddingMode]],
-) -> Array:
-    """Gets inner borders, outer borders, or union of inner and outer borders.
-
-    Args:
-        array: A 2D array that represents an image.
-        direction: The direction indicating inner borders, outer borders, or a union
-            of inner and outer borders.
-        pad_mode: The padding mode to use.
-
-    Returns:
-        A Boolean array in which all True elements are at and only at borders.
-    """
-    if direction is Direction.IN:
-        return binary_erode(array, _PLUS_KERNEL, pad_mode)
-    elif direction is Direction.OUT:
-        return ~binary_dilate(array, _PLUS_KERNEL, pad_mode)
-    elif direction is Direction.BOTH:
-        eroded = binary_erode(array, _PLUS_KERNEL, pad_mode[0])
-        dilated = binary_dilate(array, _PLUS_KERNEL, pad_mode[1])
-        return ~dilated | eroded
-    else:
-        raise ValueError(f"Unknown direction: {direction.name}.")
-
-
-def _get_pixel_size(array: Array, phys_size: PhysicalSize) -> PixelSize:
-    """Gets the pixel size from an array and physical size."""
-    return tuple(p / s for p, s in zip(phys_size, array.shape))
-
-
-def _binarize(array: Array) -> Array:
-    """Binarizes the input array."""
-
-    return array > _BINARIZATION_THRESHOLD * max(array.flatten()) + (
-        1 - _BINARIZATION_THRESHOLD
-    ) * min(array.flatten())
-
-
-def get_kernel(
-    diameter: float,
-    pixel_size: PixelSize = (1.0, 1.0),
-    kernel_shape: KernelShape = KernelShape.CIRCLE,
-) -> Array:
-    """Gets the kernel with a given diameter and pixel size.
-
-    Args:
-        diameter: A float that represents the diameter of the kernel, which acts
-            like a probe.
-        pixel_size: A tuple, list, or array that represents the physical size of one
-            pixel in the image.
-        kernel_shape: The kernel shape to use.
-
-    Returns:
-        An array of unsigned integers 0 and 1 representing the kernel for
-        morpological operations.
-    """
-
-    pixel_size = np.asarray(pixel_size)
-    shape = np.array(np.round(diameter / pixel_size), dtype=int)
-
-    if shape[0] <= 2 and shape[1] <= 2:
-        return np.ones(shape, dtype=np.uint8)
-
-    rounded_size = np.round(diameter / pixel_size - 1) * pixel_size
-
-    if kernel_shape is KernelShape.CIRCLE:
-        x_tick = np.linspace(-rounded_size[0] / 2, rounded_size[0] / 2, shape[0])
-        y_tick = np.linspace(-rounded_size[1] / 2, rounded_size[1] / 2, shape[1])
-        x, y = np.meshgrid(x_tick, y_tick, sparse=True, indexing="ij")
-        return np.array(x**2 + y**2 <= diameter**2 / 4, dtype=np.uint8)
-    elif kernel_shape is KernelShape.RECTANGLE:
-        return np.ones(shape, dtype=np.uint8)
-    else:
-        raise ValueError(f"Unknown kernel shape: {kernel_shape.name}.")
-
-
-def _get_padding_for_kernel(kernel: Array) -> Tuple[Padding, Padding]:
-    """Gets padding and unpadding width for a given kernel."""
-    shape = kernel.shape
+def _pad_width_for_kernel_shape(shape: Tuple[int, ...]) -> Tuple[_Padding, _Padding]:
+    """Prepares `pad_width` and `unpad_width` for the given kernel shape."""
+    assert len(shape) == 2
     pad_width = ((shape[0],) * 2, (shape[1],) * 2)
     unpad_width = (
         (
@@ -742,181 +389,230 @@ def _get_padding_for_kernel(kernel: Array) -> Tuple[Padding, Padding]:
     return pad_width, unpad_width
 
 
-def binary_open(
-    array: Array,
-    kernel: Array,
-    pad_mode: PaddingMode = PaddingMode.EDGE,
-) -> Array:
-    """Applies a binary morphological opening.
+def erode_large_features(x: NDArray, periodic: Tuple[bool, bool]) -> NDArray:
+    """Erodes large features while leaving small features untouched.
+
+    Note that this operation can change the topology of `x`, i.e. it
+    may create two disconnected solid features where originally there
+    was a single contiguous feature.
 
     Args:
-        array: A binarized 2D array that represents a binary image.
-        kernel: The kernel to use.
-        pad_mode: The padding mode.
+        x: Bool-typed rank-2 array to be eroded.
+        periodic: Specifies which of the two axes are to be regarded as periodic.
 
     Returns:
-        A boolean array that represents the outcome of morphological opening.
+        The array with eroded features.
     """
-    pad_width, unpad_width = _get_padding_for_kernel(kernel)
-    array = _apply_padding(array, pad_width, pad_mode)
-    opened = cv.morphologyEx(src=array, kernel=kernel, op=cv.MORPH_OPEN)
-    return _remove_padding(opened, unpad_width).view(bool)
+    assert x.dtype == bool
+
+    # Identify interior solid pixels, which should not be removed. Pixels for
+    # which the neighborhood sum equals `9` are interior pixels.
+    neighborhood_sum = _filter_2d(x, SQUARE_3_KERNEL, periodic, PaddingMode.EDGE)
+    interior_pixels = neighborhood_sum == 9
+
+    # Identify solid pixels that are adjacent to interior pixels.
+    adjacent_to_interior = (
+        x
+        & ~interior_pixels
+        & binary_dilation(
+            x=interior_pixels,
+            kernel=PLUS_5_KERNEL,
+            periodic=periodic,
+            padding_mode=PaddingMode.EDGE,
+        )
+    )
+
+    removed_by_erosion = x & ~binary_erosion(
+        x, PLUS_3_KERNEL, periodic, PaddingMode.EDGE
+    )
+    should_remove = adjacent_to_interior & removed_by_erosion
+    return onp.asarray(x & ~should_remove)
 
 
-def binary_close(
-    arr: Array,
-    kernel: Array,
-    pad_mode: PaddingMode = PaddingMode.EDGE,
-) -> Array:
-    """Applies a binary morphological closing.
+def _filter_2d(
+    x: NDArray, kernel: NDArray, periodic: Tuple[bool, bool], padding_mode: PaddingMode
+) -> NDArray:
+    """Convolves `x` with `kernel`."""
+    assert x.dtype == bool
+    assert kernel.dtype == bool
+    pad_width, unpad_width = _pad_width_for_kernel_shape(kernel.shape)
+    filtered = cv2.filter2D(
+        src=pad_2d(x, pad_width, periodic, padding_mode).view(onp.uint8),
+        kernel=kernel.view(onp.uint8),
+        ddepth=cv2.CV_32F,
+        borderType=cv2.BORDER_REPLICATE,
+    )
+    filtered = onp.around(onp.asarray(filtered)).astype(int)
+    return unpad(filtered, unpad_width)
+
+
+def pad_2d(
+    x: NDArray,
+    pad_width: Tuple[Tuple[int, int], Tuple[int, int]],
+    periodic: Tuple[bool, bool],
+    padding_mode: PaddingMode,
+) -> NDArray:
+    """Pads rank-2 boolean array `x` with the specified mode.
+
+    Padding may take values from the edge pixels, or be entirely solid or
+    void, determined by the `mode` parameter.
 
     Args:
-        arr: A binarized 2D array that represents a binary image.
-        kernel: The kernel to use.
-        pad_mode: The padding mode.
+        x: The array to be padded.
+        pad_width: The extent of the padding, `((i_lo, i_hi), (j_lo, j_hi))`.
+        periodic: Specifies which of the two axes are to be regarded as periodic.
+        padding_mode: Specifies the padding mode to be used.
 
     Returns:
-        A boolean array that represents the outcome of morphological closing.
+        The padded array.
     """
-    pad_width, unpad_width = _get_padding_for_kernel(kernel)
-    arr = _apply_padding(arr, pad_width, pad_mode)
-    closed = cv.morphologyEx(src=arr, kernel=kernel, op=cv.MORPH_CLOSE)
-    return _remove_padding(closed, unpad_width).view(bool)
-
-
-def binary_erode(
-    array: Array,
-    kernel: Array,
-    pad_mode: PaddingMode = PaddingMode.EDGE,
-) -> Array:
-    """Applies a binary morphological erosion.
-
-    Args:
-        array: A binarized 2D array that represents a binary image.
-        kernel: The kernel to use.
-        pad_mode: The padding mode.
-
-    Returns:
-        A boolean array that represents the outcome of morphological erosion.
-    """
-    pad_width, unpad_width = _get_padding_for_kernel(kernel)
-    array = _apply_padding(array, pad_width, pad_mode)
-    eroded = cv.erode(array, kernel)
-    return _remove_padding(eroded, unpad_width).view(bool)
-
-
-def binary_dilate(
-    array: Array,
-    kernel: Array,
-    pad_mode: PaddingMode = PaddingMode.EDGE,
-) -> Array:
-    """Applies a binary morphological dilation.
-
-    Args:
-        array: A binarized 2D array that represents a binary image.
-        kernel: The kernel to use.
-        pad_mode: The padding mode.
-
-    Returns:
-        A boolean array that represents the outcome of morphological dilation.
-    """
-    pad_width, unpad_width = _get_padding_for_kernel(kernel)
-    array = _apply_padding(array, pad_width, pad_mode)
-    dilated = cv.dilate(array, kernel)
-    return _remove_padding(dilated, unpad_width).view(bool)
-
-
-def _apply_padding(array: Array, pad_width: Padding, pad_mode: PaddingMode) -> Array:
-    """Applies padding to the input array."""
+    assert x.dtype == bool
     ((top, bottom), (left, right)) = pad_width
-    if pad_mode is PaddingMode.EDGE:
-        return cv.copyMakeBorder(
-            array.view(np.uint8),
-            top=top,
-            bottom=bottom,
-            left=left,
-            right=right,
-            borderType=cv.BORDER_REPLICATE,
-        )
-    elif pad_mode is PaddingMode.SOLID:
-        return cv.copyMakeBorder(
-            array.view(np.uint8),
-            top=top,
-            bottom=bottom,
-            left=left,
-            right=right,
-            borderType=cv.BORDER_CONSTANT,
-            value=1,
-        )
-    elif pad_mode is PaddingMode.VOID:
-        return cv.copyMakeBorder(
-            array.view(np.uint8),
-            top=top,
-            bottom=bottom,
-            left=left,
-            right=right,
-            borderType=cv.BORDER_CONSTANT,
-            value=0,
-        )
+
+    pad_value = 1 if padding_mode == PaddingMode.SOLID else 0
+
+    if periodic[0]:
+        border_type_i = cv2.BORDER_WRAP
+    elif padding_mode == PaddingMode.EDGE:
+        border_type_i = cv2.BORDER_REPLICATE
     else:
-        raise ValueError(f"Unknown padding mode: {pad_mode.name}.")
-
-
-def _remove_padding(array: Array, pad_width: Padding) -> Array:
-    """Removes padding from the input array."""
-    slices = tuple(
-        slice(pad_lo, dim - pad_hi)
-        for (pad_lo, pad_hi), dim in zip(pad_width, array.shape)
+        border_type_i = cv2.BORDER_CONSTANT
+    x = cv2.copyMakeBorder(  # type: ignore[call-overload]
+        src=x.view(onp.uint8),
+        top=top,
+        bottom=bottom,
+        left=0,
+        right=0,
+        borderType=border_type_i,
+        value=pad_value,
     )
-    return array[slices]
+
+    if periodic[1]:
+        border_type_j = cv2.BORDER_WRAP
+    elif padding_mode == PaddingMode.EDGE:
+        border_type_j = cv2.BORDER_REPLICATE
+    else:
+        border_type_j = cv2.BORDER_CONSTANT
+    x = cv2.copyMakeBorder(  # type: ignore[call-overload]
+        src=x,
+        top=0,
+        bottom=0,
+        left=left,
+        right=right,
+        borderType=border_type_j,
+        value=pad_value,
+    ).view(bool)
+    return onp.asarray(x)
 
 
-def _trim_margins(
-    array: Array, margin_size: MarginSize, pixel_size: PixelSize
-) -> Array:
-    """Trims margins from an array.
+def unpad(
+    x: NDArray,
+    pad_width: Tuple[Tuple[int, int], ...],
+) -> NDArray:
+    """Undoes a pad operation."""
+    slices = tuple(
+        slice(pad_lo, dim - pad_hi) for (pad_lo, pad_hi), dim in zip(pad_width, x.shape)
+    )
+    return x[slices]
+
+
+# ------------------------------------------------------------------------------
+# Functions that find thresholds of nearly-monotonic functions.
+# ------------------------------------------------------------------------------
+
+
+def maximum_true_arg(
+    nearly_monotonic_fn: Callable[[int], bool],
+    min_arg: int,
+    max_arg: int,
+    non_monotonic_allowance: int,
+) -> int:
+    """Searches for the maximum integer for which `nearly_monotonic_fn` is `True`.
+
+    This requires `nearly_monotonic_fn` to be approximately monotonically
+    decreasing, i.e. it should be `True` for small arguments and then `False` for
+    large arguments. Some allowance for "noisy" behavior at the transition is
+    controlled by `non_monotonic_allowance`.
+
+    The input argument is checked in the range `[min_arg, max_arg]`, where both
+    values are positive. If `test_fn` is never `True`, `min_arg` is returned.
+
+    Note that the algorithm here assumes that `nearly_monotonic_fn` is expensive
+    to evaluate with large arguments, and so a "small first" search strategy is
+    employed. For this reason, `min_arg` must be positive.
 
     Args:
-        array: The 1D or 2D binarized image array.
-        margin_size: The physical dimensions of the image margins. If specified,
-            this subregion is excluded from the length scale measurement. Default is
-            no margins.
-        pixel_size: The physical size of one pixel in the image.
+        nearly_monotonic_fn: The function for which the maximum `True` argument is
+            sought.
+        min_arg: The minimum argument. Must be positive.
+        max_arg: The maximum argument. Must be greater than `min_arg.`
+        non_monotonic_allowance: The number of candidate arguments where the
+            function evaluates to `False` to be considered before concluding that the
+            maximum `True` argument is smaller than the candidates. Must be positive.
 
     Returns:
-        The input array with the sepecified margins trimmed.
+        The maximum `True` argument, or `min_arg`.
     """
+    assert min_arg > 0
+    assert min_arg < max_arg
+    assert non_monotonic_allowance > 0
 
-    array = np.squeeze(array)
-    arr_dim = array.ndim
-    margin_size = abs(np.reshape(margin_size, (-1, 2)))
-    margin_dim = len(margin_size)
+    max_true_arg = min_arg - 1
 
-    if margin_dim > arr_dim:
-        raise ValueError(
-            "The number of rows of margin_size should not "
-            "exceed the dimension of the input array."
-        )
+    while min_arg <= max_arg:
+        # We double `min_arg` rather than bisecting, as this requires fewer
+        # evaluations when the minimum `True` value is close to `min_arg`.
+        test_arg_start = min(min_arg * 2, (min_arg + max_arg) // 2)
+        test_arg_stop = min(test_arg_start + non_monotonic_allowance, max_arg + 1)
+        for test_arg in range(test_arg_start, test_arg_stop):
+            result = nearly_monotonic_fn(test_arg)
+            if result:
+                break
+        if result:
+            min_arg = test_arg + 1
+            max_true_arg = max(max_true_arg, test_arg)
+        else:
+            max_arg = test_arg_start - 1
+    return max_true_arg
 
-    pixel_size = np.asarray(pixel_size)
-    margin_number = np.array(margin_size) / pixel_size[0 : len(margin_size)].reshape(
-        len(margin_size), 1
-    )
-    margin_number = np.round(margin_number).astype(
-        int
-    )  # numbers of pixels of marginal regions
 
-    if (np.array(array.shape)[0:margin_dim] - np.sum(margin_number, axis=1) < 2).all():
-        raise ValueError(
-            "The design region is too narrow or contains " "margins which are too wide."
-        )
+# ------------------------------------------------------------------------------
+# Functions that handle the special case of 1D patterns.
+# ------------------------------------------------------------------------------
 
-    if margin_dim == 1:
-        return array[margin_number[0][0] : -margin_number[0][1]]
-    elif margin_dim == 2:
-        return array[
-            margin_number[0][0] : -margin_number[0][1],
-            margin_number[1][0] : -margin_number[1][1],
-        ]
+
+def minimum_length_scale_1d(x: NDArray, periodic: bool) -> Tuple[int, int]:
+    """Return the minimum solid and void length scale for a 1D array."""
+    assert x.dtype == bool
+    x = x.astype(int)
+
+    # Find interior locations within `x` where the pattern transistions from
+    # solid to void, or vice versa.
+    xpad = onp.pad(x, (1, 1), mode="edge")
+    delta = onp.roll(xpad, 1) - xpad
+    delta = delta[1:-1]
+    (idxs,) = onp.where(onp.abs(delta) > 0)
+
+    # Determine the dimensions of each region.
+    idxs = onp.concatenate([[0], idxs, [x.size]])
+    dims = idxs[1:] - idxs[:-1]
+
+    if periodic:
+        # Wrap the starting region in the case of a periodic pattern.
+        if x[0] == x[-1]:
+            dims = onp.concatenate([[dims[0] + dims[-1]], dims[1:-1]])
+            dims = onp.minimum(dims, x.size)
     else:
-        raise ValueError("The input array has too many dimensions.")
+        # If not periodic, discount the first and last regions.
+        dims = dims[1:-1]
+
+    # Find the minimum length scale.
+    min_dim_first_region = int(onp.amin(dims[::2]) if len(dims) > 0 else x.size)
+    min_dim_second_region = int(onp.amin(dims[1::2]) if len(dims) > 1 else x.size)
+
+    starts_with_solid = bool(x[0])
+    starts_with_void = not starts_with_solid
+    if starts_with_solid and periodic or (starts_with_void and not periodic):
+        return min_dim_first_region, min_dim_second_region
+    else:
+        return min_dim_second_region, min_dim_first_region

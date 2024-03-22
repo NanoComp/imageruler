@@ -11,14 +11,14 @@ license = {file = "LICENSE"}
 authors = [
     {name = "Wenchao Ma", email = "mawc@mit.edu"},
     {name = "Ian A. D. Williamson"},
-    {name = "Martin Schubert"},
+    {name = "Martin Schubert", email = "mfschubert@gmail.com"},
     {name = "Ardavan Oskooi"},
     {name = "Steven G. Johnson", email = "stevenj@mit.edu"},
 ]
 maintainers = [
     {name = "Wenchao Ma", email = "mawc@mit.edu"},
     {name = "Ian A. D. Williamson"},
-    {name = "Martin Schubert"},
+    {name = "Martin Schubert", email = "mfschubert@gmail.com"},
     {name = "Ardavan Oskooi"},
     {name = "Steven G. Johnson", email = "stevenj@mit.edu"},
 ]
@@ -34,11 +34,13 @@ tests = [
     "pytest",
     "pytest-cov",
     "pytest-xdist",
+    "scipy",
 ]
 dev = [
     "bump-my-version",
     "darglint",
     "imageruler[tests]",
+    "mypy",
     "pre-commit",
 ]
 

@@ -48,8 +48,8 @@ repos:
       - id: ruff
         exclude: ^tests/
 
-  #   # Strip whitespace from notebooks.
-  # - repo: https://github.com/kynan/nbstripout
-  #   rev: 0.6.0
-  #   hooks:
-  #     - id: nbstripout
+    # Strip whitespace from notebooks.
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.6.0
+    hooks:
+      - id: nbstripout
