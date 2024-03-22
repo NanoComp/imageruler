@@ -27,6 +27,6 @@ jobs:
             python -m pip install --upgrade pip
             pip install ".[tests,dev,examples]"
 
-      - name: Run experiment
+      - name: Run program on reference design
         run: |
-          python imageruler reference_devices/Rasmus70nm.csv
+          python imageruler reference_designs/Rasmus70nm.csv
