@@ -34,6 +34,7 @@ tests = [
     "pytest",
     "pytest-cov",
     "pytest-xdist",
+    "scipy",
 ]
 dev = [
     "bump-my-version",
