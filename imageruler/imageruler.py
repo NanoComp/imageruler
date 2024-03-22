@@ -713,13 +713,12 @@ def get_kernel(
   pixel_size = np.asarray(pixel_size)
   kernel_size = np.array(np.round(diameter / pixel_size), dtype=int)
 
-  if kernel_size[0] <= 2 and kernel_size[1] <= 2:
-    if kernel_size[0] == 0 or kernel_size[1] == 0:
-      return np.array([[1]], dtype=np.uint8)
-    else:
-      return np.ones(kernel_size, dtype=np.uint8)
-
-  rounded_size = np.round(diameter / pixel_size - 1) * pixel_size
+  if kernel_size[0] == 0 or kernel_size[1] == 0:
+    return np.array([[1]], dtype=np.uint8)
+  elif kernel_size in np.array([[2,2], [2,1], [1,2], [2,1]]):
+    return np.ones(kernel_size, dtype=np.uint8)
+  else:
+    rounded_size = np.round(diameter / pixel_size - 1) * pixel_size
 
   if kernel_shape is KernelShape.CIRCLE:
     x_tick = np.linspace(-rounded_size[0] / 2, rounded_size[0] / 2, kernel_size[0])
