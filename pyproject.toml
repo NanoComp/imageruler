@@ -40,6 +40,7 @@ docs = [
     "matplotlib",
     "jupyter-book",
     "scipy",
+    "skimage",
     "sphinx-autodoc-typehints",
     "sphinx-click",
 ]
