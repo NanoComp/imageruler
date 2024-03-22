@@ -36,6 +36,12 @@ tests = [
     "pytest-xdist",
     "scipy",
 ]
+docs = [
+    "matplotlib",
+    "jupyter-book",
+    "sphinx-autodoc-typehints",
+    "sphinx-click",
+]
 dev = [
     "bump-my-version",
     "darglint",
