@@ -11,7 +11,7 @@ import numpy as onp
 NDArray = onp.ndarray[Any, Any]
 
 
-FEASIBILITY_GAP_ALLOWANCE = 5
+FEASIBILITY_GAP_ALLOWANCE = 10
 
 PLUS_3_KERNEL = onp.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)
 PLUS_5_KERNEL = onp.array(
