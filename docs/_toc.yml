@@ -8,3 +8,4 @@ parts:
     chapters:
     - file: notebooks/simple_shapes
     - file: notebooks/to_designs
+    - file: notebooks/advanced
