@@ -64,8 +64,8 @@ def minimum_length_scale(
     created with a given brush, then its solid and void features are unchanged by
     binary opening operations with that brush.
 
-    In some cases, an array that can be creatied with a brush of size `n` cannot
-    be created with the samller brush if size `n - 1`. Further, small pixel-scale
+    In some cases, an array that can be created with a brush of size `n` cannot
+    be created with the smaller brush if size `n - 1`. Further, small pixel-scale
     violations at edges of features may be unimportant. Some allowance for these
     is provided via optional arguments to this function.
 
@@ -203,7 +203,7 @@ def length_scale_violations_solid_strict(
     Args:
         x: Bool-typed rank-2 array containing the features.
         length_scale: The length scale for which violations are sought.
-        periodic: Specifies which of the two axes are to be regarded as periodic.s
+        periodic: Specifies which of the two axes are to be regarded as periodic.
         ignore_scheme: Specifies what pixels are ignored when detecting violations.
 
     Returns:
