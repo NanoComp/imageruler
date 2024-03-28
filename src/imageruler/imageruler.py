@@ -83,6 +83,10 @@ def minimum_length_scale(
     Returns:
         The detected minimum length scales `(length_scale_solid, length_scale_void)`.
     """
+    # Note that when the minimum of solid and void length scale is desired,
+    # a faster implementation involving comparison between binary opening and
+    # closing of designs is possible. This could improve performance by a factor
+    # of two or greater.
     if x.ndim != 2:
         raise ValueError(f"`x` must be 2-dimensional, but got shape {x.shape}.")
     if not isinstance(x, onp.ndarray):
