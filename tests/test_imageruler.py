@@ -1,4 +1,4 @@
-"""Tests for `metrics`."""
+"""Tests for `imageruler`."""
 
 import itertools
 import unittest
