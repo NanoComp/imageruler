@@ -11,7 +11,7 @@ import numpy as onp
 NDArray = onp.ndarray[Any, Any]
 
 
-FEASIBILITY_GAP_ALLOWANCE = 10
+DEFAULT_FEASIBILITY_GAP_ALLOWANCE = 10
 
 PLUS_3_KERNEL = onp.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)
 PLUS_5_KERNEL = onp.array(
@@ -54,7 +54,7 @@ def minimum_length_scale(
     x: NDArray,
     periodic: Tuple[bool, bool] = (False, False),
     ignore_scheme: IgnoreScheme = IgnoreScheme.LARGE_FEATURE_EDGES,
-    feasibility_gap_allowance: int = FEASIBILITY_GAP_ALLOWANCE,
+    feasibility_gap_allowance: int = DEFAULT_FEASIBILITY_GAP_ALLOWANCE,
 ) -> Tuple[int, int]:
     """Identifies the minimum length scale of solid and void features in `x`.
 
@@ -73,11 +73,12 @@ def minimum_length_scale(
         x: Bool-typed rank-2 array containing the features.
         periodic: Specifies which of the two axes are to be regarded as periodic.
         ignore_scheme: Specifies what pixels are ignored when detecting violations.
-        feasibility_gap_allowance: In checking whether a `x` is feasible with a brush
+        feasibility_gap_allowance: In checking whether `x` is feasible with a brush
             of size `n`, we also check for feasibility with larger brushes, since
             e.g. some features realizable with a brush `n + k` may not be realizable
             with the brush of size `n`. The `feasibility_gap_allowance is the
-            maximum value of `k` checked.
+            maximum value of `k` checked. For arrays with very large features,
+            particularly when ignoring no violations, larger values may be needed.
 
     Returns:
         The detected minimum length scales `(length_scale_solid, length_scale_void)`.
@@ -114,7 +115,7 @@ def minimum_length_scale_solid(
     x: NDArray,
     periodic: Tuple[bool, bool] = (False, False),
     ignore_scheme: IgnoreScheme = IgnoreScheme.LARGE_FEATURE_EDGES,
-    feasibility_gap_allowance: int = FEASIBILITY_GAP_ALLOWANCE,
+    feasibility_gap_allowance: int = DEFAULT_FEASIBILITY_GAP_ALLOWANCE,
 ) -> int:
     """Identifies the minimum length scale of solid features in `x`.
 
@@ -122,11 +123,12 @@ def minimum_length_scale_solid(
         x: Bool-typed rank-2 array containing the features.
         periodic: Specifies which of the two axes are to be regarded as periodic.
         ignore_scheme: Specifies what pixels are ignored when detecting violations.
-        feasibility_gap_allowance: In checking whether a `x` is feasible with a brush
+        feasibility_gap_allowance: In checking whether `x` is feasible with a brush
             of size `n`, we also check for feasibility with larger brushes, since
             e.g. some features realizable with a brush `n + k` may not be realizable
             with the brush of size `n`. The `feasibility_gap_allowance is the
-            maximum value of `k` used.
+            maximum value of `k` checked. For arrays with very large features,
+            particularly when ignoring no violations, larger values may be needed.
 
     Returns:
         The detected minimum length scale of solid features.
@@ -157,20 +159,21 @@ def length_scale_violations_solid(
     length_scale: int,
     periodic: Tuple[bool, bool] = (False, False),
     ignore_scheme: IgnoreScheme = IgnoreScheme.LARGE_FEATURE_EDGES,
-    feasibility_gap_allowance: int = FEASIBILITY_GAP_ALLOWANCE,
+    feasibility_gap_allowance: int = DEFAULT_FEASIBILITY_GAP_ALLOWANCE,
 ) -> NDArray:
     """Computes the length scale violations, allowing for the feasibility gap.
 
     Args:
         x: Bool-typed rank-2 array containing the features.
         length_scale: The length scale for which violations are sought.
-        periodic: Specifies which of the two axes are to be regarded as periodic.s
+        periodic: Specifies which of the two axes are to be regarded as periodic.
         ignore_scheme: Specifies what pixels are ignored when detecting violations.
-        feasibility_gap_allowance: In checking whether a `x` is feasible with a brush
+        feasibility_gap_allowance: In checking whether `x` is feasible with a brush
             of size `n`, we also check for feasibility with larger brushes, since
             e.g. some features realizable with a brush `n + k` may not be realizable
             with the brush of size `n`. The `feasibility_gap_allowance is the
-            maximum value of `k` used.
+            maximum value of `k` checked. For arrays with very large features,
+            particularly when ignoring no violations, larger values may be needed.
 
     Returns:
         The array containing violations.
