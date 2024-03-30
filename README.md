@@ -3,8 +3,6 @@
 
 Imageruler is a free Python program to compute the minimum length scale of binary images which are typically designs produced by topology optimization. The algorithm is described in Section 2 of [J. Optical Society of America B, Vol. 42, pp. A161-A176 (2024)](https://opg.optica.org/josab/abstract.cfm?uri=josab-41-2-A161) and is based on morphological transformations implemented using [OpenCV](https://github.com/opencv/opencv). Imageruler also supports 1d binary images.
 
-For examples of using Imageruler on a variety of structures, see this [notebook](notebooks/examples.ipynb). Documentation is currently provided by the docstrings. A user manual is under development.
-
 ## Algorithm for Determining Minimum Length Scale
 
 The procedure used by Imageruler for determining the minimum length scale of the solid regions in a binary image involves four steps:

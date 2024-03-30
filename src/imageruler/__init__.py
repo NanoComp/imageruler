@@ -3,6 +3,7 @@
 __version__ = "v0.2.0"
 __all__ = [
     "IgnoreScheme",
+    "kernel_for_length_scale",
     "minimum_length_scale",
     "minimum_length_scale_solid",
     "length_scale_violations_solid",
@@ -10,6 +11,7 @@ __all__ = [
 
 from imageruler.imageruler import (
     IgnoreScheme,
+    kernel_for_length_scale,
     length_scale_violations_solid,
     minimum_length_scale,
     minimum_length_scale_solid,
