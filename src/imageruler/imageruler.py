@@ -29,7 +29,17 @@ SQUARE_3_KERNEL = onp.ones((3, 3), dtype=bool)
 
 @enum.unique
 class IgnoreScheme(enum.Enum):
-    """Enumerates schemes for ignoring length scale violations."""
+    """Enumerates schemes for ignoring length scale violations.
+
+    Supported schemes are:
+
+      - `NONE`: a strict scheme in which no violations are ignored.
+      - `EDGES`: ignores violations on the edges of all features.
+      - `LARGE_FEATURE_EDGES`: ignores violations at the edges of large features only.
+        A pixel is on the edge of a large feature if it is on the edge of the feature,
+        and adjacent to an interior pixel. Here, interior pixels are those not on any
+        edges.
+    """
 
     NONE = "none"
     EDGES = "edges"
