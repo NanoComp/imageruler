@@ -443,7 +443,7 @@ def corners_se(x: NDArray) -> NDArray:
 
 
 def detect_corners(
-    x: onp.ndarray,
+    x: NDArray,
     periodic: Tuple[bool, bool],
 ) -> NDArray:
     """Idetifies corners of solid features in `x`.
