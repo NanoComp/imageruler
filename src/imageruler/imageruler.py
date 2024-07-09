@@ -26,16 +26,16 @@ PLUS_5_KERNEL = onp.array(
 )
 SQUARE_3_KERNEL = onp.ones((3, 3), dtype=bool)
 
-NE_CORNER_KERNEL = onp.array(
+N_EDGE_KERNEL = onp.array(
     [
-        [-1, -1],
-        [1, -1],
+        [-1, -1, -1],
+        [0, 1, 0],
     ],
     dtype=onp.int8,
 )
-NW_CORNER_KERNEL = onp.rot90(NE_CORNER_KERNEL, k=1)
-SW_CORNER_KERNEL = onp.rot90(NE_CORNER_KERNEL, k=2)
-SE_CORNER_KERNEL = onp.rot90(NE_CORNER_KERNEL, k=3)
+W_EDGE_KERNEL = onp.rot90(N_EDGE_KERNEL, k=1)
+S_EDGE_KERNEL = onp.rot90(N_EDGE_KERNEL, k=2)
+E_EDGE_KERNEL = onp.rot90(N_EDGE_KERNEL, k=3)
 
 
 @enum.unique
@@ -50,16 +50,17 @@ class IgnoreScheme(enum.Enum):
         A pixel is on the edge of a large feature if it is on the edge of the feature,
         and adjacent to an interior pixel. Here, interior pixels are those not on any
         edges.
-      - `LARGE_FEATURE_CORNERS`: ignores violations at the corners of large features.
+      - `LARGE_FEATURE_EDGES_STRICT`: similar to `LARGE_FEATURE_EDGES`, but uses a more
+        strict algorithm to detect edges and does not ignore checkerboard patterns.
     """
 
     NONE = "none"
     EDGES = "edges"
     LARGE_FEATURE_EDGES = "large_feature_edges"
-    LARGE_FEATURE_CORNERS = "large_feature_corners"
+    LARGE_FEATURE_EDGES_STRICT = "large_feature_edges_strict"
 
 
-DEFAULT_IGNORE_SCHEME = IgnoreScheme.LARGE_FEATURE_CORNERS
+DEFAULT_IGNORE_SCHEME = IgnoreScheme.LARGE_FEATURE_EDGES_STRICT
 
 
 @enum.unique
@@ -348,8 +349,8 @@ def ignored_pixels(
         )
     elif ignore_scheme == IgnoreScheme.LARGE_FEATURE_EDGES:
         return onp.asarray(x & ~erode_large_features(x, periodic))
-    elif ignore_scheme == IgnoreScheme.LARGE_FEATURE_CORNERS:
-        return onp.asarray(x & ~erode_large_feature_corners(x, periodic))
+    elif ignore_scheme == IgnoreScheme.LARGE_FEATURE_EDGES_STRICT:
+        return onp.asarray(x & ~erode_large_features_strict(x, periodic))
     else:
         raise ValueError(f"Unknown `ignore_scheme`, got {ignore_scheme}.")
 
@@ -408,65 +409,6 @@ def binary_dilation(
     return unpad(dilated.view(bool), unpad_width)
 
 
-def hitmiss(
-    x: NDArray,
-    kernel: NDArray,
-    anchor_ij: Tuple[int, int] = (-1, -1),
-) -> NDArray:
-    """Applies the hitmiss transformation to `x`."""
-    anchor_y, anchor_x = anchor_ij
-    return cv2.morphologyEx(
-        x.view(onp.uint8),
-        kernel=kernel,
-        op=cv2.MORPH_HITMISS,
-        anchor=(anchor_x, anchor_y),
-        borderType=cv2.BORDER_REPLICATE,
-    ).view(bool)
-
-
-def corners_ne(x: NDArray) -> NDArray:
-    """Detect northeast corners of solid features."""
-    return hitmiss(x, kernel=NE_CORNER_KERNEL, anchor_ij=(1, 0))
-
-
-def corners_nw(x: NDArray) -> NDArray:
-    """Detect northwest corners of solid features."""
-    return hitmiss(x, kernel=NW_CORNER_KERNEL, anchor_ij=(1, 1))
-
-
-def corners_sw(x: NDArray) -> NDArray:
-    """Detect southwest corners of solid features."""
-    return hitmiss(x, kernel=SW_CORNER_KERNEL, anchor_ij=(0, 1))
-
-
-def corners_se(x: NDArray) -> NDArray:
-    """Detect southeast corners of solid features."""
-    return hitmiss(x, kernel=SE_CORNER_KERNEL, anchor_ij=(0, 0))
-
-
-def detect_corners(
-    x: NDArray,
-    periodic: Tuple[bool, bool],
-) -> NDArray:
-    """Idetifies corners of solid features in `x`.
-
-    An example of a corner is a pixel which is solid, and has void pixels above,
-    to the left, and diagonally to the top left (or any rotation thereof).
-
-    Args:
-        x: Bool-typed rank-2 array where corners are to be detected.
-        periodic: Specifies which of the two axes are to be regarded as periodic.
-
-    Returns:
-        The array with identified corners.
-    """
-    x = pad_2d(
-        x, pad_width=((2, 2), (2, 2)), periodic=periodic, padding_mode=PaddingMode.EDGE
-    )
-    corners = corners_ne(x) | corners_nw(x) | corners_sw(x) | corners_se(x)
-    return corners[2:-2, 2:-2]
-
-
 _Padding = Tuple[Tuple[int, int], Tuple[int, int]]
 
 
@@ -485,6 +427,65 @@ def _pad_width_for_kernel_shape(shape: Tuple[int, ...]) -> Tuple[_Padding, _Padd
         ),
     )
     return pad_width, unpad_width
+
+
+def hitmiss(
+    x: NDArray,
+    kernel: NDArray,
+    anchor_ij: Tuple[int, int] = (-1, -1),
+) -> NDArray:
+    """Applies the hitmiss transformation to `x`."""
+    anchor_y, anchor_x = anchor_ij
+    return cv2.morphologyEx(
+        x.view(onp.uint8),
+        kernel=kernel,
+        op=cv2.MORPH_HITMISS,
+        anchor=(anchor_x, anchor_y),
+        borderType=cv2.BORDER_REPLICATE,
+    ).view(bool)
+
+
+def edges_n(x: NDArray) -> NDArray:
+    """Detect northeast corners of solid features."""
+    return hitmiss(x, kernel=N_EDGE_KERNEL, anchor_ij=(1, 1)) & x
+
+
+def edges_w(x: NDArray) -> NDArray:
+    """Detect northwest corners of solid features."""
+    return hitmiss(x, kernel=W_EDGE_KERNEL, anchor_ij=(1, 1)) & x
+
+
+def edges_s(x: NDArray) -> NDArray:
+    """Detect southwest corners of solid features."""
+    return hitmiss(x, kernel=S_EDGE_KERNEL, anchor_ij=(0, 1)) & x
+
+
+def edges_e(x: NDArray) -> NDArray:
+    """Detect southeast corners of solid features."""
+    return hitmiss(x, kernel=E_EDGE_KERNEL, anchor_ij=(1, 0)) & x
+
+
+def detect_edges(
+    x: NDArray,
+    periodic: Tuple[bool, bool],
+) -> NDArray:
+    """Idetifies corners of solid features in `x`.
+
+    An example of a corner is a pixel which is solid, and has void pixels above,
+    to the left, and diagonally to the top left (or any rotation thereof).
+
+    Args:
+        x: Bool-typed rank-2 array where corners are to be detected.
+        periodic: Specifies which of the two axes are to be regarded as periodic.
+
+    Returns:
+        The array with identified corners.
+    """
+    x = pad_2d(
+        x, pad_width=((2, 2), (2, 2)), periodic=periodic, padding_mode=PaddingMode.EDGE
+    )
+    edges = edges_n(x) | edges_w(x) | edges_s(x) | edges_e(x)
+    return edges[2:-2, 2:-2]
 
 
 def erode_large_features(x: NDArray, periodic: Tuple[bool, bool]) -> NDArray:
@@ -527,8 +528,11 @@ def erode_large_features(x: NDArray, periodic: Tuple[bool, bool]) -> NDArray:
     return onp.asarray(x & ~should_remove)
 
 
-def erode_large_feature_corners(x: NDArray, periodic: Tuple[bool, bool]) -> NDArray:
-    """Erodes corners of large features while leaving small features untouched.
+def erode_large_features_strict(x: NDArray, periodic: Tuple[bool, bool]) -> NDArray:
+    """Erodes large features while leaving small features untouched.
+
+    This function uses a more strict algorithm than `erode_large_features`, and will
+    not remove the corners in a checkerboard pattern.
 
     Args:
         x: Bool-typed rank-2 array to be eroded.
@@ -542,7 +546,7 @@ def erode_large_feature_corners(x: NDArray, periodic: Tuple[bool, bool]) -> NDAr
     neighborhood_sum = _filter_2d(x, SQUARE_3_KERNEL, periodic, PaddingMode.EDGE)
     interior_pixels = neighborhood_sum == 9
 
-    corner_pixels = detect_corners(x, periodic=periodic)
+    edge_pixels = detect_edges(x, periodic=periodic)
 
     # Identify solid pixels that are adjacent to interior pixels.
     adjacent_to_interior = (
@@ -555,8 +559,7 @@ def erode_large_feature_corners(x: NDArray, periodic: Tuple[bool, bool]) -> NDAr
             padding_mode=PaddingMode.EDGE,
         )
     )
-
-    should_remove = adjacent_to_interior & corner_pixels
+    should_remove = adjacent_to_interior & edge_pixels
     return onp.asarray(x & ~should_remove)
 
 

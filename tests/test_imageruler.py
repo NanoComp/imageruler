@@ -148,7 +148,7 @@ class LengthScaleTest(unittest.TestCase):
                 [
                     imageruler.IgnoreScheme.NONE,
                     imageruler.IgnoreScheme.LARGE_FEATURE_EDGES,
-                    imageruler.IgnoreScheme.LARGE_FEATURE_CORNERS,
+                    imageruler.IgnoreScheme.LARGE_FEATURE_EDGES_STRICT,
                 ],
             )
         )
@@ -432,60 +432,6 @@ class MorphologyOperationsTest(unittest.TestCase):
             x, kernel, periodic=(False, False), padding_mode=padding_mode
         )
         onp.testing.assert_array_equal(expected, actual)
-
-    def test_detect_corners(self):
-        x = onp.array(
-            [
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1],
-                [0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1],
-                [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1],
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            ],
-            dtype=bool,
-        )
-        expected = onp.array(
-            [
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0],
-                [0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            ],
-            dtype=bool,
-        )
-        onp.testing.assert_array_equal(
-            imageruler.detect_corners(x, periodic=(False, False)), expected
-        )
-
-    def test_detect_corners_periodic(self):
-        x = onp.array(
-            [
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1],
-                [0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1],
-                [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1],
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            ],
-            dtype=bool,
-        )
-        expected = onp.array(
-            [
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1],
-                [0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1],
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            ],
-            dtype=bool,
-        )
-        onp.testing.assert_array_equal(
-            imageruler.detect_corners(x, periodic=(True, True)), expected
-        )
 
     def test_opening_removes_small_features(self):
         # Test that a feature that is feasible with a size-4 brush is eliminated
