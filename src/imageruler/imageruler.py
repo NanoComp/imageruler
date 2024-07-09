@@ -292,7 +292,7 @@ def _length_scale_violations_solid_strict(
 
     ignored = ignored_pixels(x, periodic, ignore_scheme)
     violations_solid = violations_solid & ~ignored
-    return violations_solid
+    return onp.asarray(violations_solid)
 
 
 def kernel_for_length_scale(length_scale: int) -> NDArray:
@@ -343,11 +343,13 @@ def ignored_pixels(
     if ignore_scheme == IgnoreScheme.NONE:
         return onp.zeros_like(x)
     elif ignore_scheme == IgnoreScheme.EDGES:
-        return x & ~binary_erosion(x, PLUS_3_KERNEL, periodic, PaddingMode.SOLID)
+        return onp.asarray(
+            x & ~binary_erosion(x, PLUS_3_KERNEL, periodic, PaddingMode.SOLID)
+        )
     elif ignore_scheme == IgnoreScheme.LARGE_FEATURE_EDGES:
-        return x & ~erode_large_features(x, periodic)
+        return onp.asarray(x & ~erode_large_features(x, periodic))
     elif ignore_scheme == IgnoreScheme.LARGE_FEATURE_CORNERS:
-        return x & ~erode_large_feature_corners(x, periodic)
+        return onp.asarray(x & ~erode_large_feature_corners(x, periodic))
     else:
         raise ValueError(f"Unknown `ignore_scheme`, got {ignore_scheme}.")
 
