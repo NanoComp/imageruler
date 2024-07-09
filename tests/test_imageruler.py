@@ -148,6 +148,7 @@ class LengthScaleTest(unittest.TestCase):
                 [
                     imageruler.IgnoreScheme.NONE,
                     imageruler.IgnoreScheme.LARGE_FEATURE_EDGES,
+                    imageruler.IgnoreScheme.LARGE_FEATURE_EDGES_STRICT,
                 ],
             )
         )
