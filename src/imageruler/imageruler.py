@@ -11,8 +11,6 @@ import numpy as onp
 NDArray = onp.ndarray[Any, Any]
 
 
-DEFAULT_FEASIBILITY_GAP_ALLOWANCE = 10
-
 PLUS_3_KERNEL = onp.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)
 PLUS_5_KERNEL = onp.array(
     [
@@ -26,6 +24,7 @@ PLUS_5_KERNEL = onp.array(
 )
 SQUARE_3_KERNEL = onp.ones((3, 3), dtype=bool)
 
+# Kernels for detecting horizontal and vertical edges.
 N_EDGE_KERNEL = onp.array(
     [
         [-1, -1, -1],
@@ -36,6 +35,18 @@ N_EDGE_KERNEL = onp.array(
 W_EDGE_KERNEL = onp.rot90(N_EDGE_KERNEL, k=1)
 S_EDGE_KERNEL = onp.rot90(N_EDGE_KERNEL, k=2)
 E_EDGE_KERNEL = onp.rot90(N_EDGE_KERNEL, k=3)
+
+# Kernels for detecting corners, i.e. "diagonal edges".
+NE_CORNER_KERNEL = onp.array(
+    [
+        [-1, -1],
+        [1, -1],
+    ],
+    dtype=onp.int8,
+)
+NW_CORNER_KERNEL = onp.rot90(NE_CORNER_KERNEL, k=1)
+SW_CORNER_KERNEL = onp.rot90(NE_CORNER_KERNEL, k=2)
+SE_CORNER_KERNEL = onp.rot90(NE_CORNER_KERNEL, k=3)
 
 
 @enum.unique
@@ -61,6 +72,7 @@ class IgnoreScheme(enum.Enum):
 
 
 DEFAULT_IGNORE_SCHEME = IgnoreScheme.LARGE_FEATURE_EDGES_STRICT
+DEFAULT_FEASIBILITY_GAP_ALLOWANCE = 10
 
 
 @enum.unique
@@ -465,14 +477,34 @@ def edges_e(x: NDArray) -> NDArray:
     return hitmiss(x, kernel=E_EDGE_KERNEL, anchor_ij=(1, 0)) & x
 
 
+def corners_ne(x: NDArray) -> NDArray:
+    """Detect northeast corners of solid features."""
+    return hitmiss(x, kernel=NE_CORNER_KERNEL, anchor_ij=(1, 0))
+
+
+def corners_nw(x: NDArray) -> NDArray:
+    """Detect northwest corners of solid features."""
+    return hitmiss(x, kernel=NW_CORNER_KERNEL, anchor_ij=(1, 1))
+
+
+def corners_sw(x: NDArray) -> NDArray:
+    """Detect southwest corners of solid features."""
+    return hitmiss(x, kernel=SW_CORNER_KERNEL, anchor_ij=(0, 1))
+
+
+def corners_se(x: NDArray) -> NDArray:
+    """Detect southeast corners of solid features."""
+    return hitmiss(x, kernel=SE_CORNER_KERNEL, anchor_ij=(0, 0))
+
+
 def detect_edges(
     x: NDArray,
     periodic: Tuple[bool, bool],
 ) -> NDArray:
-    """Idetifies corners of solid features in `x`.
+    """Idetifies edges of solid features in `x`.
 
-    An example of a corner is a pixel which is solid, and has void pixels above,
-    to the left, and diagonally to the top left (or any rotation thereof).
+    The edge of a solid feature may either be horizontal (north or south) or vertical
+    (east or west), or can be a corner (northeast, northwest, southeast, southwest).
 
     Args:
         x: Bool-typed rank-2 array where corners are to be detected.
@@ -484,7 +516,16 @@ def detect_edges(
     x = pad_2d(
         x, pad_width=((2, 2), (2, 2)), periodic=periodic, padding_mode=PaddingMode.EDGE
     )
-    edges = edges_n(x) | edges_w(x) | edges_s(x) | edges_e(x)
+    edges = (
+        edges_n(x)
+        | edges_w(x)
+        | edges_s(x)
+        | edges_e(x)
+        | corners_ne(x)
+        | corners_nw(x)
+        | corners_sw(x)
+        | corners_se(x)
+    )
     return edges[2:-2, 2:-2]
 
 
