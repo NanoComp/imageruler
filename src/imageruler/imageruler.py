@@ -652,7 +652,7 @@ def pad_2d(
         border_type_i = cv2.BORDER_REPLICATE
     else:
         border_type_i = cv2.BORDER_CONSTANT
-    x = cv2.copyMakeBorder(  # type: ignore[call-overload]
+    x = cv2.copyMakeBorder(
         src=x.view(onp.uint8),
         top=top,
         bottom=bottom,
@@ -668,7 +668,7 @@ def pad_2d(
         border_type_j = cv2.BORDER_REPLICATE
     else:
         border_type_j = cv2.BORDER_CONSTANT
-    x = cv2.copyMakeBorder(  # type: ignore[call-overload]
+    x = cv2.copyMakeBorder(
         src=x,
         top=0,
         bottom=0,
