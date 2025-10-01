@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -29,4 +29,4 @@ jobs:
 
       - name: Run program on reference design
         run: |
-          python imageruler reference_designs/Rasmus70nm.csv
+          python imageruler reference_designs/rgb_metalens/ex/Rasmus70nm.csv
